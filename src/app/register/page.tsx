@@ -32,8 +32,9 @@ export default function RegisterPage() {
 
     const res = await signUp.email({
       email: data.email,
-      phone: data.phone,
       password: data.password,
+      name: data.email.split('@')[0],
+      phone: data.phone,
     });
 
     if (res.error) {

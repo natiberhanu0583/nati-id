@@ -1,10 +1,10 @@
 // lib/auth.ts
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
-import prisma from '@/lib/prisma';
+import authPrisma from '@/lib/auth-prisma';
 
 export const auth = betterAuth({
-  database: prismaAdapter(prisma, {
+  database: prismaAdapter(authPrisma, {
     provider: 'postgresql',
   }),
   emailAndPassword: {
@@ -20,8 +20,12 @@ export const auth = betterAuth({
   },
   socialProviders: {
     google: {
-      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientId: process.env.GOOGLE_ClIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }
+  },
+  logger: {
+    level: "debug",
+    enabled: true,
   },
 });
