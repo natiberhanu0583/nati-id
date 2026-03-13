@@ -88,6 +88,8 @@ export default function Home() {
   const [customBackTemplate, setCustomBackTemplate] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'pdf' | 'screenshot'>('pdf');
   const [screenshotFiles, setScreenshotFiles] = useState<(File | null)[]>([null, null, null]);
+  const [isMultiScreenshotMode, setIsMultiScreenshotMode] = useState(false);
+  const [multiScreenshotSets, setMultiScreenshotSets] = useState<(File | null)[][]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -138,6 +140,59 @@ export default function Home() {
 
     const droppedFiles = Array.from(e.dataTransfer.files);
     handleFilesSelection(droppedFiles);
+  };
+
+  const handleScreenshotDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleScreenshotDrop = (e: React.DragEvent, imageIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      if (file.type.startsWith('image/')) {
+        const newFiles = [...screenshotFiles];
+        newFiles[imageIndex] = file;
+        setScreenshotFiles(newFiles);
+      } else {
+        setError('Please drop an image file');
+      }
+    }
+  };
+
+  const addScreenshotSet = () => {
+    if (multiScreenshotSets.length < 5) {
+      setMultiScreenshotSets([...multiScreenshotSets, [null, null, null]]);
+    } else {
+      setError('Maximum 5 ID cards allowed');
+    }
+  };
+
+  const removeScreenshotSet = (index: number) => {
+    setMultiScreenshotSets(multiScreenshotSets.filter((_, i) => i !== index));
+  };
+
+  const updateScreenshotSet = (setIndex: number, imageIndex: number, file: File | null) => {
+    const newSets = [...multiScreenshotSets];
+    newSets[setIndex][imageIndex] = file;
+    setMultiScreenshotSets(newSets);
+  };
+
+  const handleMultiScreenshotDrop = (e: React.DragEvent, setIndex: number, imageIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      if (file.type.startsWith('image/')) {
+        updateScreenshotSet(setIndex, imageIndex, file);
+      } else {
+        setError('Please drop an image file');
+      }
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -277,53 +332,122 @@ export default function Home() {
   async function handleScreenshotUpload(e: React.FormEvent) {
     e.preventDefault();
 
-    const [, img2, img3] = screenshotFiles;
-    if (!img2 || !img3) {
-      setError("Image 2 and Image 3 are mandatory.");
-      return;
-    }
+    if (isMultiScreenshotMode) {
+      // Multi-ID mode validation
+      if (multiScreenshotSets.length === 0) {
+        setError("Please add at least one ID card set.");
+        return;
+      }
 
-    if (userPoints && userPoints.points < 1) {
-      setError(`Insufficient points. You need 1 point to process screenshots.`);
-      return;
-    }
+      const validSets = multiScreenshotSets.filter(set => set[1] && set[2]);
+      if (validSets.length === 0) {
+        setError("Each ID card set must have Image 2 and Image 3.");
+        return;
+      }
 
-    setLoading(true);
-    setError(null);
-    setAllExtractedData([]);
+      if (userPoints && userPoints.points < validSets.length) {
+        setError(`Insufficient points. You need ${validSets.length} points for ${validSets.length} ID cards.`);
+        return;
+      }
 
-    try {
-      const formData = new FormData();
-      if (screenshotFiles[0]) formData.append("image1", screenshotFiles[0]);
-      formData.append("image2", screenshotFiles[1]!);
-      formData.append("image3", screenshotFiles[2]!);
+      setLoading(true);
+      setError(null);
+      setAllExtractedData([]);
 
-      const response = await axios.post("/api/process-screenshots", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
+      try {
+        const newExtractedData: any[] = [];
+
+        for (let i = 0; i < multiScreenshotSets.length; i++) {
+          const screenshotSet = multiScreenshotSets[i];
+          if (!screenshotSet[1] || !screenshotSet[2]) continue; // Skip incomplete sets
+
+          const formData = new FormData();
+          if (screenshotSet[0]) formData.append("image1", screenshotSet[0]);
+          formData.append("image2", screenshotSet[1]!);
+          formData.append("image3", screenshotSet[2]!);
+
+          try {
+            const response = await axios.post("/api/process-screenshots", formData, {
+              headers: {
+                "Content-Type": "multipart/form-data",
+              }
+            });
+
+            if (response.data.success) {
+              if (response.data) {
+                const transformedData = {
+                  ...response.data,
+                  images: response.data.images?.map((img: string) => transformImageUrl(img))
+                };
+                newExtractedData.push(transformedData);
+              }
+            }
+          } catch (err) {
+            console.error(`Error processing ID set ${i + 1}:`, err);
+          }
         }
-      });
 
-      if (response.data.success) {
-        if (response.data) {
-          // Transform image URLs to bypass CORS
-          const transformedData = {
-            ...response.data,
-            images: response.data.images?.map((img: string) => transformImageUrl(img))
-          };
-          setAllExtractedData([transformedData]);
+        if (newExtractedData.length > 0) {
+          setAllExtractedData(newExtractedData);
           fetchUserPoints();
         } else {
-          setError("Invalid data extracted from screenshots.");
+          setError("Failed to process any ID cards. Please check your images and try again.");
         }
-      } else {
-        setError(response.data.message || "Failed to process screenshots.");
+      } catch (err: any) {
+        console.error("Multi-screenshot upload error:", err);
+        setError("Batch processing failed. Please try again.");
+      } finally {
+        setLoading(false);
       }
-    } catch (err: any) {
-      console.error("Screenshot upload error:", err);
-      setError(err.response?.data?.message || "Screenshot processing failed. Please try again.");
-    } finally {
-      setLoading(false);
+    } else {
+      // Single ID mode (original logic)
+      const [, img2, img3] = screenshotFiles;
+      if (!img2 || !img3) {
+        setError("Image 2 and Image 3 are mandatory.");
+        return;
+      }
+
+      if (userPoints && userPoints.points < 1) {
+        setError(`Insufficient points. You need 1 point to process screenshots.`);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+      setAllExtractedData([]);
+
+      try {
+        const formData = new FormData();
+        if (screenshotFiles[0]) formData.append("image1", screenshotFiles[0]);
+        formData.append("image2", screenshotFiles[1]!);
+        formData.append("image3", screenshotFiles[2]!);
+
+        const response = await axios.post("/api/process-screenshots", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          }
+        });
+
+        if (response.data.success) {
+          if (response.data) {
+            const transformedData = {
+              ...response.data,
+              images: response.data.images?.map((img: string) => transformImageUrl(img))
+            };
+            setAllExtractedData([transformedData]);
+            fetchUserPoints();
+          } else {
+            setError("Invalid data extracted from screenshots.");
+          }
+        } else {
+          setError(response.data.message || "Failed to process screenshots.");
+        }
+      } catch (err: any) {
+        console.error("Screenshot upload error:", err);
+        setError(err.response?.data?.message || "Screenshot processing failed. Please try again.");
+      } finally {
+        setLoading(false);
+      }
     }
   }
 
@@ -516,6 +640,28 @@ export default function Home() {
                     <p className="text-slate-500 text-sm">
                       Image 2 (front card) and Image 3 (back card) are required. Image 1 (popup) is optional for colored photo.
                     </p>
+                    <div className="flex items-center justify-center gap-3 mt-4">
+                      <Label className="text-sm font-medium text-slate-700">Single ID</Label>
+                      <button
+                        type="button"
+                        onClick={() => setIsMultiScreenshotMode(!isMultiScreenshotMode)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          isMultiScreenshotMode ? 'bg-blue-600' : 'bg-slate-300'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            isMultiScreenshotMode ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                      <Label className="text-sm font-medium text-slate-700">Multiple IDs</Label>
+                    </div>
+                    {isMultiScreenshotMode && (
+                      <p className="text-xs text-blue-600 mt-2">
+                        Enable multiple ID mode to process several ID cards at once (1 point per ID)
+                      </p>
+                    )}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {[1, 2, 3].map((num) => (
@@ -536,6 +682,8 @@ export default function Home() {
                             : 'border-blue-100 hover:border-blue-300 bg-slate-50/50'
                             }`}
                           onClick={() => document.getElementById(`screenshot-${num}`)?.click()}
+                          onDragOver={(e) => handleScreenshotDragOver(e)}
+                          onDrop={(e) => handleScreenshotDrop(e, num - 1)}
                         >
                           {screenshotFiles[num - 1] ? (
                             <div className="w-full h-full relative">
@@ -586,20 +734,202 @@ export default function Home() {
                     ))}
                   </div>
 
+                  {/* Multi-ID Mode Interface */}
+                  {isMultiScreenshotMode && (
+                    <div className="space-y-6 border-t border-blue-100 pt-6">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-semibold text-slate-800">
+                          Multiple ID Cards ({multiScreenshotSets.length}/5)
+                        </h3>
+                        <Button
+                          type="button"
+                          onClick={addScreenshotSet}
+                          disabled={multiScreenshotSets.length >= 5}
+                          className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add ID Card
+                        </Button>
+                      </div>
+
+                      {multiScreenshotSets.length === 0 ? (
+                        <div className="text-center py-12 border-2 border-dashed border-blue-200 rounded-xl">
+                          <p className="text-slate-500">Click "Add ID Card" to start adding multiple ID cards</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          {multiScreenshotSets.map((screenshotSet, setIndex) => (
+                            <div key={setIndex} className="border rounded-xl p-4 bg-slate-50">
+                              <div className="flex justify-between items-center mb-4">
+                                <h4 className="font-semibold text-slate-700">ID Card {setIndex + 1}</h4>
+                                <Button
+                                  type="button"
+                                  onClick={() => removeScreenshotSet(setIndex)}
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-red-200 text-red-600 hover:bg-red-50"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {[1, 2, 3].map((num) => (
+                                  <div key={num} className="space-y-2">
+                                    <div className="text-center space-y-1">
+                                      <Label className="text-teal-600 font-bold text-sm block">
+                                        Image {num} {num === 1 ? '(Optional)' : ''}
+                                      </Label>
+                                      <p className="text-slate-500 text-xs">
+                                        {num === 1 ? 'Photo + QR Popup' :
+                                          num === 2 ? 'Front of ID Card' :
+                                            'Back of ID Card'}
+                                      </p>
+                                    </div>
+                                    <div
+                                      className={`relative border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition-all duration-200 h-48 flex flex-col items-center justify-center ${screenshotSet[num - 1]
+                                        ? 'border-green-200 bg-green-50'
+                                        : 'border-blue-100 hover:border-blue-300 bg-slate-50/50'
+                                        }`}
+                                      onClick={() => document.getElementById(`multi-screenshot-${setIndex}-${num}`)?.click()}
+                                      onDragOver={(e) => handleScreenshotDragOver(e)}
+                                      onDrop={(e) => handleMultiScreenshotDrop(e, setIndex, num - 1)}
+                                    >
+                                      {screenshotSet[num - 1] ? (
+                                        <div className="w-full h-full relative">
+                                          <Image
+                                            src={URL.createObjectURL(screenshotSet[num - 1]!)}
+                                            alt={`ID ${setIndex + 1} - Image ${num}`}
+                                            fill
+                                            className="object-contain"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              updateScreenshotSet(setIndex, num - 1, null);
+                                            }}
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 z-10"
+                                          >
+                                            <X className="h-3 w-3" />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <Upload className="h-5 w-5 text-blue-200 mb-2" />
+                                          <div className="bg-slate-200/50 shadow-sm px-4 py-1 rounded-lg text-slate-700 font-medium text-xs hover:bg-slate-200 transition-colors">
+                                            Select
+                                          </div>
+                                        </>
+                                      )}
+                                      <Input
+                                        id={`multi-screenshot-${setIndex}-${num}`}
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0] || null;
+                                          updateScreenshotSet(setIndex, num - 1, file);
+                                        }}
+                                        className="hidden"
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Preview All Uploaded IDs */}
+                  {isMultiScreenshotMode && multiScreenshotSets.some(set => set.some(file => file !== null)) && (
+                    <div className="space-y-4 border-t border-blue-100 pt-6">
+                      <h3 className="text-lg font-semibold text-slate-800">Preview All Uploaded IDs</h3>
+                      <div className="space-y-4">
+                        {multiScreenshotSets.map((screenshotSet, setIndex) => {
+                          const hasImages = screenshotSet.some(file => file !== null);
+                          if (!hasImages) return null;
+                          
+                          return (
+                            <div key={setIndex} className="border rounded-xl p-4 bg-blue-50/30">
+                              <h4 className="font-semibold text-slate-700 mb-3">ID Card {setIndex + 1}</h4>
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                {[1, 2, 3].map((num) => (
+                                  <div key={num} className="space-y-2">
+                                    <div className="text-center">
+                                      <Label className="text-teal-600 font-bold text-sm">
+                                        Image {num} {num === 1 ? '(Optional)' : ''}
+                                      </Label>
+                                    </div>
+                                    {screenshotSet[num - 1] ? (
+                                      <div className="relative h-32 border rounded-lg overflow-hidden bg-white">
+                                        <Image
+                                          src={URL.createObjectURL(screenshotSet[num - 1]!)}
+                                          alt={`ID ${setIndex + 1} - Image ${num}`}
+                                          fill
+                                          className="object-contain"
+                                        />
+                                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent p-2">
+                                          <p className="text-white text-xs font-medium">
+                                            {num === 1 ? 'Photo + QR' :
+                                             num === 2 ? 'Front' : 'Back'}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="h-32 border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center bg-gray-50">
+                                        <p className="text-gray-400 text-xs">No image</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="mt-3 flex items-center gap-2">
+                                <div className={`w-3 h-3 rounded-full ${
+                                  screenshotSet[1] && screenshotSet[2] ? 'bg-green-500' : 'bg-yellow-500'
+                                }`} />
+                                <span className="text-sm text-slate-600">
+                                  {screenshotSet[1] && screenshotSet[2] ? 'Ready to process' : 'Missing required images'}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <p className="text-sm text-blue-700">
+                          <strong>Total IDs ready:</strong> {multiScreenshotSets.filter(set => set[1] && set[2]).length} / {multiScreenshotSets.length}
+                        </p>
+                        <p className="text-xs text-blue-600 mt-1">
+                          Each ID requires Image 2 (Front) and Image 3 (Back) to be processed
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <Button
                     type="submit"
-                    disabled={!screenshotFiles[1] || !screenshotFiles[2] || loading}
+                    disabled={
+                      isMultiScreenshotMode 
+                        ? (multiScreenshotSets.length === 0 || multiScreenshotSets.every(set => !set[1] || !set[2]) || loading)
+                        : (!screenshotFiles[1] || !screenshotFiles[2] || loading)
+                    }
                     className="w-full bg-blue-600 mt-4 hover:bg-blue-700 text-white px-8 py-6 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg shadow-blue-500/25"
                   >
                     {loading ? (
                       <>
                         <Loader2 className="mr-3 h-5 w-5 animate-spin" />
-                        Processing Screenshots...
+                        {isMultiScreenshotMode ? 'Processing Multiple IDs...' : 'Processing Screenshots...'}
                       </>
                     ) : (
                       <>
                         <Upload className="mr-3 h-5 w-5" />
-                        Extract Data from Screenshots
+                        {isMultiScreenshotMode 
+                          ? `Extract Data from ${multiScreenshotSets.filter(set => set[1] && set[2]).length} ID Card(s)`
+                          : 'Extract Data from Screenshots'
+                        }
                       </>
                     )}
                   </Button>
