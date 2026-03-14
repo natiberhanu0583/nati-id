@@ -167,7 +167,7 @@ export default function Home() {
       }
       setMultiScreenshotSets(newSets);
     }
-  }, [activeIdSection, multiScreenshotSets.length]);
+  }, [activeIdSection]);
 
   // Drag and drop handlers
   const handleDragOver = (e: React.DragEvent) => {
@@ -210,7 +210,7 @@ export default function Home() {
   };
 
   const handleIdButtonClick = (idNumber: number) => {
-    // Simple toggle logic
+    console.log('Clicked ID:', idNumber, 'Current active:', activeIdSection, 'Current sets length:', multiScreenshotSets.length);
     if (activeIdSection === idNumber) {
       setActiveIdSection(null);
     } else {
