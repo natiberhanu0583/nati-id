@@ -112,7 +112,7 @@ const transformImageUrl = (url: string | undefined): string => {
 };
 
 export default function Home() {
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<(File | null)[]>([null, null, null, null, null]);
   const [allExtractedData, setAllExtractedData] = useState<ExtractedData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +122,7 @@ export default function Home() {
   const [customBackTemplate, setCustomBackTemplate] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'pdf' | 'screenshot'>('pdf');
   const [screenshotFiles, setScreenshotFiles] = useState<(File | null)[]>([null, null, null]);
-  const [isMultiScreenshotMode, setIsMultiScreenshotMode] = useState(false);
+  const [isMultiScreenshotMode, setIsMultiScreenshotMode] = useState(true);
   const [multiScreenshotSets, setMultiScreenshotSets] = useState<(File | null)[][]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -297,13 +297,15 @@ export default function Home() {
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
-    if (files.length === 0) {
+    const validFiles = files.filter(file => file !== null);
+    
+    if (validFiles.length === 0) {
       setError("Please select at least one PDF file");
       return;
     }
 
-    if (userPoints && userPoints.points < files.length) {
-      setError(`Insufficient points. You need ${files.length} points for ${files.length} files.`);
+    if (userPoints && userPoints.points < validFiles.length) {
+      setError(`Insufficient points. You need ${validFiles.length} points for ${validFiles.length} files.`);
       return;
     }
 
@@ -315,9 +317,9 @@ export default function Home() {
     const errors: string[] = [];
 
     try {
-      for (const file of files) {
+      for (const file of validFiles) {
         const formData = new FormData();
-        formData.append("file", file);
+        formData.append("file", file!);
 
         try {
           const response = await axios.post("/api/process-pdf", formData, {
@@ -614,7 +616,7 @@ export default function Home() {
                                 <div className="flex flex-col items-center justify-center h-full">
                                   <FileText className="h-8 w-8 text-green-600 mb-2" />
                                   <span className="text-green-700 font-medium text-xs truncate w-full px-2 text-center">
-                                    {files[num - 1].name}
+                                    {files[num - 1]?.name || 'PDF uploaded'}
                                   </span>
                                   <button
                                     type="button"
@@ -655,18 +657,18 @@ export default function Home() {
 
                     <Button
                       type="submit"
-                      disabled={files.length === 0 || loading}
+                      disabled={files.filter(f => f !== null).length === 0 || loading}
                       className="w-full bg-blue-600 mt-4 hover:bg-blue-700 text-white px-8 py-6 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg shadow-blue-500/25"
                     >
                       {loading ? (
                         <>
                           <Loader2 className="mr-3 h-5 w-5 animate-spin" />
-                          Processing {files.length} PDF(s)...
+                          Processing {files.filter(f => f !== null).length} PDF(s)...
                         </>
                       ) : (
                         <>
                           <Upload className="mr-3 h-5 w-5" />
-                          Extract Data from {files.length > 0 ? files.length : ''} File(s)
+                          Extract Data from {files.filter(f => f !== null).length > 0 ? files.filter(f => f !== null).length : ''} File(s)
                         </>
                       )}
                     </Button>
@@ -676,103 +678,14 @@ export default function Home() {
                 <form onSubmit={handleScreenshotUpload} className="space-y-6">
                   <div className="text-center space-y-2 mb-8">
                     <h2 className="text-xl font-bold text-slate-800">
-                      Upload Screenshots from the Fayda App
+                      Upload Multiple ID Screenshots from Fayda App
                     </h2>
                     <p className="text-slate-500 text-sm">
-                      Image 2 (front card) and Image 3 (back card) are required. Image 1 (popup) is optional for colored photo.
+                      Upload multiple ID cards at once. Each set needs Image 2 (front) and Image 3 (back). Image 1 (popup) is optional for colored photo.
                     </p>
-                    <div className="flex items-center justify-center gap-3 mt-4">
-                      <Label className="text-sm font-medium text-slate-700">Single ID</Label>
-                      <button
-                        type="button"
-                        onClick={() => setIsMultiScreenshotMode(!isMultiScreenshotMode)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          isMultiScreenshotMode ? 'bg-blue-600' : 'bg-slate-300'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            isMultiScreenshotMode ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                      <Label className="text-sm font-medium text-slate-700">Multiple IDs</Label>
-                    </div>
-                    {isMultiScreenshotMode && (
-                      <p className="text-xs text-blue-600 mt-2">
-                        Enable multiple ID mode to process several ID cards at once (1 point per ID)
-                      </p>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {[1, 2, 3].map((num) => (
-                      <div key={num} className="space-y-4">
-                        <div className="text-center space-y-1">
-                          <Label className="text-teal-600 font-bold text-base block">
-                            Image {num} {num === 1 ? '(Optional)' : ''}
-                          </Label>
-                          <p className="text-slate-500 text-xs">
-                            {num === 1 ? 'Photo + QR Popup (for colored photo)' :
-                              num === 2 ? 'Front of ID Card' :
-                                'Back of ID Card'}
-                          </p>
-                        </div>
-                        <div
-                          className={`relative border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-200 h-56 flex flex-col items-center justify-center ${screenshotFiles[num - 1]
-                            ? 'border-green-200 bg-green-50'
-                            : 'border-blue-100 hover:border-blue-300 bg-slate-50/50'
-                            }`}
-                          onClick={() => document.getElementById(`screenshot-${num}`)?.click()}
-                          onDragOver={(e) => handleScreenshotDragOver(e)}
-                          onDrop={(e) => handleScreenshotDrop(e, num - 1)}
-                        >
-                          {screenshotFiles[num - 1] ? (
-                            <div className="w-full h-full relative">
-                              <Image
-                                src={URL.createObjectURL(screenshotFiles[num - 1]!)}
-                                alt={`Screenshot ${num}`}
-                                fill
-                                className="object-contain"
-                              />
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const newFiles = [...screenshotFiles];
-                                  newFiles[num - 1] = null;
-                                  setScreenshotFiles(newFiles);
-                                }}
-                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 z-10"
-                              >
-                                <X className="h-4 w-4" />
-                              </button>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="flex gap-1 mb-4">
-                                <Upload className="h-6 w-6 text-blue-200" />
-
-                              </div>
-                              <div className="bg-slate-200/50 shadow-sm px-6 py-2 rounded-lg text-slate-700 font-medium text-sm hover:bg-slate-200 transition-colors">
-                                Select
-                              </div>
-                            </>
-                          )}
-                          <Input
-                            id={`screenshot-${num}`}
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0] || null;
-                              const newFiles = [...screenshotFiles];
-                              newFiles[num - 1] = file;
-                              setScreenshotFiles(newFiles);
-                            }}
-                            className="hidden"
-                          />
-                        </div>
-                      </div>
-                    ))}
+                    <p className="text-xs text-blue-600 mt-2">
+                      Process several ID cards at once (1 point per ID)
+                    </p>
                   </div>
 
                   {/* Multi-ID Mode Interface */}
