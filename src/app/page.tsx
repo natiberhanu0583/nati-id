@@ -851,6 +851,8 @@ export default function Home() {
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
 
                   {/* Preview All Uploaded IDs */}
                   {true && ( // Disabled: isMultiScreenshotMode && multiScreenshotSets.some(set => set.some(file => file !== null)) && (
