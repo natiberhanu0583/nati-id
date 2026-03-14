@@ -509,6 +509,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-8">
+                  </div>
       <div className="container mx-auto px-4 max-w-7xl">
         {/* Header Section */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8 p-6 bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-blue-100/50">
@@ -605,6 +606,7 @@ export default function Home() {
             <div className="space-y-6">
               {activeTab === 'pdf' ? (
                 <form onSubmit={handleUpload} className="space-y-6">
+                </form>
                   <div className="space-y-3">
                     <Label htmlFor="pdf-upload" className="text-slate-700 font-medium text-lg">
                       Upload Multiple PDF Files (Max 5)
@@ -667,6 +669,8 @@ export default function Home() {
                                     <X className="h-3 w-3" />
                                   </button>
                                 </div>
+                            </div>
+                            </div>
                               </div>
                               </div>
                             ) : (
@@ -675,6 +679,8 @@ export default function Home() {
                                 <div className="bg-slate-200/50 shadow-sm px-3 py-1 rounded-lg text-slate-700 font-medium text-xs hover:bg-slate-200 transition-colors">
                                   Select PDF
                                 </div>
+                            </div>
+                            </div>
                               </>
                             )}
                             </div>
@@ -731,6 +737,8 @@ export default function Home() {
                   {/* Multi-ID Mode Interface */}
                   {isMultiScreenshotMode && (
                     <div className="space-y-6 border-t border-blue-100 pt-6">
+                  </div>
+                  </div>
                       {/* Quick Add Buttons */}
                       <div className="grid grid-cols-5 gap-2">
                         {[1, 2, 3, 4, 5].map((idNum) => (
