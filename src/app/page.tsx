@@ -330,18 +330,27 @@ export default function Home() {
             if (response.data) {
               const transformedData = {
                 ...response.data,
-        const transformedData = newExtractedData.map(data => ({
-          ...data,
-          images: data.images?.map((img: string) => transformImageUrl(img))
-        }));
-        setAllExtractedData(transformedData);
-        fetchUserPoints();
+                images: response.data.images?.map((img: string) => transformImageUrl(img))
+              };
+              newExtractedData.push(transformedData);
+            }
+          }
+        } catch (err) {
+          console.error("Error processing file:", err);
+          errors.push("Error processing file");
+        }
       }
 
       if (errors.length > 0) {
         setError(errors.join(". "));
       }
 
+      if (newExtractedData.length > 0) {
+        setAllExtractedData(newExtractedData);
+        fetchUserPoints();
+      } else {
+        setError("Failed to process any files. Please check your files and try again.");
+      }
     } catch (err: unknown) {
       console.error("Upload error:", err);
       setError("Global upload failed. Please try again.");
