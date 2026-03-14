@@ -204,9 +204,14 @@ export default function Home() {
       setActiveIdSection(null);
     } else {
       setActiveIdSection(idNumber);
-      // Ensure we have enough sets for this ID
-      while (multiScreenshotSets.length < idNumber) {
-        setMultiScreenshotSets(prev => [...prev, [null, null, null]]);
+      // Ensure we have enough sets for this ID - add all needed sets at once
+      const currentLength = multiScreenshotSets.length;
+      if (currentLength < idNumber) {
+        const newSets = [...multiScreenshotSets];
+        for (let i = currentLength; i < idNumber; i++) {
+          newSets.push([null, null, null]);
+        }
+        setMultiScreenshotSets(newSets);
       }
     }
   };
