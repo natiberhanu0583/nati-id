@@ -47,7 +47,7 @@ const defaultValues: Partial<AddPointsFormValues> = {
 
 export default function AddPointsPage() {
   const [loading, setLoading] = useState(false);
-  const [recentTransaction, setRecentTransaction] = useState<any>(null);
+  const [recentTransaction, setRecentTransaction] = useState<{message: string; success: boolean} | null>(null);
   const session = useSession()
   console.log(session, "session")
 

@@ -3,7 +3,6 @@ import axios from 'axios';
 import { PrismaClient } from '@/generated/prisma/client';
 import { auth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
-import { revalidateTag } from 'next/cache';
 
 const prisma = new PrismaClient();
 
@@ -88,14 +87,17 @@ export async function POST(request: Request) {
         // Return the response from external API
         return NextResponse.json(response.data, { status: 200 });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Screenshot proxy error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        const errorResponse = (error as { response?: { data?: { message?: string }; status?: number } })?.response;
+        
         return NextResponse.json(
             {
-                message: error.response?.data?.message || 'Failed to process screenshots',
-                error: error.message
+                message: errorResponse?.data?.message || 'Failed to process screenshots',
+                error: errorMessage
             },
-            { status: error.response?.status || 500 }
+            { status: errorResponse?.status || 500 }
         );
     }
 }
