@@ -706,6 +706,49 @@ export default function Home() {
                         </Button>
                       </div>
 
+                      {/* Quick Add Buttons */}
+                      <div className="flex flex-wrap gap-3 justify-center">
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            const currentLength = multiScreenshotSets.length;
+                            const toAdd = Math.min(3, 5 - currentLength);
+                            for (let i = 0; i < toAdd; i++) {
+                              addScreenshotSet();
+                            }
+                          }}
+                          disabled={multiScreenshotSets.length >= 5}
+                          className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add ID 1, ID 2, ID 3
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            const currentLength = multiScreenshotSets.length;
+                            const toAdd = Math.min(2, 5 - currentLength);
+                            for (let i = 0; i < toAdd; i++) {
+                              addScreenshotSet();
+                            }
+                          }}
+                          disabled={multiScreenshotSets.length >= 4}
+                          className="bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add ID 1, ID 2
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={addScreenshotSet}
+                          disabled={multiScreenshotSets.length >= 5}
+                          className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add ID 1
+                        </Button>
+                      </div>
+
                       {multiScreenshotSets.length === 0 ? (
                         <div className="text-center py-12 border-2 border-dashed border-blue-200 rounded-xl">
                           <p className="text-slate-500">Click &quot;Add ID Card&quot; to start adding multiple ID cards</p>
