@@ -1397,11 +1397,11 @@ function GeneratedIDCardPreview({ data, index, customFrontTemplate, customBackTe
   const [selectedQRCodeImage, setSelectedQRCodeImage] = useState<string>(data.images?.[3] || data.images?.[2] || '');
   const [serialNumber, setSerialNumber] = useState<string>(generateRandomSerial());
   const [hue, setHue] = useState<number>(0);
-  const [saturation, setSaturation] = useState<number>(25);
-  const [lightness, setLightness] = useState<number>(140);
-  const [contrast, setContrast] = useState<number>(100);
+  const [saturation, setSaturation] = useState<number>(20);
+  const [lightness, setLightness] = useState<number>(100);
+  const [contrast, setContrast] = useState<number>(79);
   const [grayscale, setGrayscale] = useState<number>(0);
-  const [sepia, setSepia] = useState<number>(60);
+  const [sepia, setSepia] = useState<number>(0);
 
   const defaultFrontImageUrl = '/front-template.jpg';
   const defaultBackImageUrl = '/back-template.jpg';
