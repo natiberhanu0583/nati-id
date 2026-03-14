@@ -87,22 +87,21 @@ export async function POST(request: Request) {
     });
 
     // Revalidate with tag
-    revalidateTag(`user-points-${userId}`);
+    revalidateTag(`user-points-${userId}`, 'default');
     // Return the response from external API
     return NextResponse.json(response.data);
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Proxy error:', error);
-
-
-
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    const errorResponse = (error as { response?: { data?: { message?: string }; status?: number } })?.response;
 
     return NextResponse.json(
       {
-        message: error.response?.data?.message || 'Failed to process PDF',
-        error: error.message
+        message: errorResponse?.data?.message || 'Failed to process PDF',
+        error: errorMessage
       },
-      { status: error.response?.status || 500 }
+      { status: errorResponse?.status || 500 }
     );
   }
 }

@@ -47,14 +47,14 @@ const defaultValues: Partial<AddPointsFormValues> = {
 
 export default function AddPointsPage() {
   const [loading, setLoading] = useState(false);
-  const [recentTransaction, setRecentTransaction] = useState<{message: string; success: boolean} | null>(null);
+  const [recentTransaction, setRecentTransaction] = useState<{message: string; success: boolean; email: string; points: number} | null>(null);
   const session = useSession()
   console.log(session, "session")
 
 
 
   const form = useForm<AddPointsFormValues>({
-    resolver: zodResolver(addPointsFormSchema),
+    resolver: zodResolver(addPointsFormSchema) as any,
     defaultValues,
   });
 

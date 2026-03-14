@@ -34,7 +34,6 @@ export default function RegisterPage() {
       email: data.email,
       password: data.password,
       name: data.email.split('@')[0],
-      phone: data.phone,
     });
 
     if (res.error) {

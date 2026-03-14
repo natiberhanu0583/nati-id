@@ -327,18 +327,9 @@ export default function Home() {
           });
 
           if (response.data.success) {
-            if (validateExtractedData(response.data)) {
-              newExtractedData.push(response.data);
-            } else {
-            }
-          }
-        } catch (err) {
-          console.error(`Error processing ID set ${i + 1}:`, err);
-        }
-      }
-
-      if (newExtractedData.length > 0) {
-        setAllExtractedData(newExtractedData);
+            if (response.data) {
+              const transformedData = {
+                ...response.data,
         const transformedData = newExtractedData.map(data => ({
           ...data,
           images: data.images?.map((img: string) => transformImageUrl(img))
