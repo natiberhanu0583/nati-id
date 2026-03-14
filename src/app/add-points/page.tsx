@@ -54,7 +54,7 @@ export default function AddPointsPage() {
 
 
   const form = useForm<AddPointsFormValues>({
-    resolver: zodResolver(addPointsFormSchema) as any,
+    resolver: zodResolver(addPointsFormSchema) as unknown,
     defaultValues,
   });
 
