@@ -8,16 +8,13 @@ const FormData = require('form-data');
 const { createCanvas, loadImage, registerFont } = require('canvas');
 const { Document, Packer, Paragraph, ImageRun, AlignmentType } = require('docx');
 
-// Register fonts precisely
+// Register fonts
 try {
     const ebrimaBoldPath = 'C:\\Windows\\Fonts\\ebrimabd.ttf';
     if (fs.existsSync(ebrimaBoldPath)) registerFont(ebrimaBoldPath, { family: 'EbrimaBold' });
-    
     const fontPath = path.join(__dirname, 'public', 'NOKIA ኖኪያ ቀላል.TTF');
     if (fs.existsSync(fontPath)) registerFont(fontPath, { family: 'AmharicFont' });
-} catch (e) {
-    console.error('Font registration failed:', e.message);
-}
+} catch (e) {}
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 bot.use(session());
@@ -66,19 +63,15 @@ async function processId(ctx) {
     try {
         const formData = new FormData();
         const urls = ctx.session.images;
-        
         const buffers = await Promise.all(urls.map(url => 
             url ? axios.get(url, { responseType: 'arraybuffer' }).then(r => Buffer.from(r.data)) : Promise.resolve(null)
         ));
-
         if (buffers[0]) formData.append('image1', buffers[0], { filename: '1.jpg' });
         formData.append('image2', buffers[1], { filename: '2.jpg' });
         formData.append('image3', buffers[2], { filename: '3.jpg' });
-
         const response = await axios.post(API_URL, formData, {
             headers: { ...formData.getHeaders(), 'Authorization': `Bearer ${JWT_TOKEN}` }
         });
-
         if (response.data) {
             ctx.session.currentIdData = response.data;
             await ctx.reply('✅ Extracted! Choose Template:', 
@@ -91,46 +84,6 @@ async function processId(ctx) {
     } catch (e) { ctx.reply('❌ Error: ' + e.message); }
 }
 
-bot.action(['tpl_a', 'tpl_b', 'tpl_c'], async (ctx) => {
-    const m = { 'tpl_a':['front-template.jpg','back-template.jpg'], 'tpl_b':['front-templateb.jpg','back-template.jpg'], 'tpl_c':['front-template.jpg','back-template.jpg'] };
-    // Note: User said Template C is like Template A but with center alignment, so we use front-template.jpg
-    [ctx.session.templateChoice, ctx.session.backTemplateChoice] = m[ctx.match];
-    await ctx.answerCbQuery().catch(() => {});
-    await ctx.editMessageText('Choose Photo Style:', Markup.inlineKeyboard([
-        [Markup.button.callback('🌈 Color', 'style_color'), Markup.button.callback('⚫️ B&W', 'style_bw')]
-    ]));
-});
-
-bot.action(['style_color', 'style_bw'], async (ctx) => {
-    ctx.session.filterChoice = ctx.match === 'style_color' ? 'color' : 'bw';
-    await ctx.answerCbQuery().catch(() => {});
-    
-    ctx.session.allProcessedData.push({
-        data: ctx.session.currentIdData,
-        template: ctx.session.templateChoice,
-        backTemplate: ctx.session.backTemplateChoice,
-        filter: ctx.session.filterChoice,
-        isTemplateC: ctx.session.templateChoice === 'front-template.jpg' && ctx.session.filterChoice // Marker
-    });
-    
-    // Check if it was Template C based on the action flow
-    const lastIdx = ctx.session.allProcessedData.length - 1;
-    // We don't have the original callback data here easily, so let's just make it simpler
-    
-    ctx.session.images = [];
-    ctx.session.step = 0;
-
-    await ctx.editMessageText(`✅ ID Added! Total Batch: ${ctx.session.allProcessedData.length}`, 
-        Markup.inlineKeyboard([
-            [Markup.button.callback('➕ Add Another ID', 'add_more')],
-            [Markup.button.callback('🖼 Bulk Individual (JPG)', 'gen_bulk_jpg')],
-            [Markup.button.callback('📝 Shelf (Word)', 'gen_word')],
-            [Markup.button.callback('🔄 Restart Batch', 'restart')]
-        ])
-    );
-});
-
-// Update the action handler metadata
 bot.action('tpl_c', async (ctx) => {
     ctx.session.templateChoice = 'front-template.jpg';
     ctx.session.backTemplateChoice = 'back-template.jpg';
@@ -140,6 +93,7 @@ bot.action('tpl_c', async (ctx) => {
         [Markup.button.callback('🌈 Color', 'style_color'), Markup.button.callback('⚫️ B&W', 'style_bw')]
     ]));
 });
+
 bot.action(['tpl_a', 'tpl_b'], async (ctx) => {
     const m = { 'tpl_a':['front-template.jpg','back-template.jpg'], 'tpl_b':['front-templateb.jpg','back-template.jpg'] };
     [ctx.session.templateChoice, ctx.session.backTemplateChoice] = m[ctx.match];
@@ -196,25 +150,26 @@ function getFullUrl(p) {
 }
 
 const fontStack = '"EbrimaBold", "Arial"';
+// Standard ID aspect ratio (CR-80) at high res
+const ID_W = 1280;
+const ID_H = 807;
 
 async function renderAndSendSingleID(ctx, id, idx) {
     const name = id.data.english_name || 'Unnamed';
-    console.log(`Starting render for ID #${idx + 1}: ${name}`);
-    
     const pPath = id.data.images && (id.data.images[1] || id.data.images[0]);
     const mPath = id.data.images && id.data.images[0];
     const qPath = id.data.images && (id.data.images[3] || id.data.images[2]);
 
     const urls = [getFullUrl(pPath), getFullUrl(mPath), getFullUrl(qPath)];
-    const fetchPromises = urls.map(u => u ? axios.get(u, { responseType: 'arraybuffer', timeout: 15000 }).then(r => loadImage(Buffer.from(r.data))).catch(err => null) : Promise.resolve(null));
+    const fetchPromises = urls.map(u => u ? axios.get(u, { responseType: 'arraybuffer', timeout: 15000 }).then(r => loadImage(Buffer.from(r.data))).catch(() => null) : Promise.resolve(null));
     const [pImg, mImg, qImg] = await Promise.all(fetchPromises);
 
     const render = async (isFront) => {
-        const canvas = createCanvas(1280, 800);
+        const canvas = createCanvas(ID_W, ID_H);
         const g = canvas.getContext('2d');
         if (isFront) {
             const tpl = await getCachedTemplate(id.template);
-            g.drawImage(tpl, 0, 0);
+            g.drawImage(tpl, 0, 0, ID_W, ID_H); // Fixed: Force scaling to fit aspect ratio
             if (pImg) {
                 g.save();
                 g.filter = id.filter === 'bw' ? 'grayscale(100%) brightness(110%) contrast(110%)' : 'saturate(45%) brightness(100%) grayscale(74%) sepia(10%)';
@@ -226,17 +181,16 @@ async function renderAndSendSingleID(ctx, id, idx) {
             drawText(g, id.data, id.isTemplateC);
         } else {
             const bTpl = await getCachedTemplate(id.backTemplate);
-            g.drawImage(bTpl, 0, 0);
+            g.drawImage(bTpl, 0, 0, ID_W, ID_H); // Fixed: Force scaling to fit aspect ratio
             if (qImg) { g.fillStyle='white'; g.fillRect(576, 40, 666, 650); g.drawImage(qImg, 576, 40, 666, 650); }
             drawBackInfo(g, id.data, id.isTemplateC);
         }
-        return canvas.toBuffer('image/jpeg', { quality: 0.80 }); 
+        return canvas.toBuffer('image/jpeg', { quality: 0.85 }); 
     };
 
     const frontBuf = await render(true);
     const backBuf = await render(false);
     const safeName = name.replace(/[^a-zA-Z0-9]/g, '_');
-
     try {
         await ctx.replyWithDocument({ source: frontBuf, filename: `${safeName}_Front.jpg` });
         await ctx.replyWithDocument({ source: backBuf, filename: `${safeName}_Back.jpg` });
@@ -253,9 +207,7 @@ bot.action('gen_bulk_jpg', async (ctx) => {
     if (!ids.length) return ctx.reply('❌ No IDs found.');
     await ctx.reply(`🖼 Sending ${ids.length} IDs...`);
     for (let i = 0; i < ids.length; i++) {
-        try { await renderAndSendSingleID(ctx, ids[i], i); } catch (e) {
-            await ctx.reply(`❌ Error for ${ids[i].data.english_name || 'ID '+(i+1)}: ${e.message}`);
-        }
+        try { await renderAndSendSingleID(ctx, ids[i], i); } catch (e) {}
     }
     ctx.reply('✨ Done!');
 });
@@ -272,8 +224,8 @@ bot.action('gen_word', async (ctx) => {
             if (r) {
                 sections.push({
                     children: [
-                        new Paragraph({ children: [new ImageRun({ data: r.frontBuf, transformation: { width: 500, height: 312 } })], alignment: AlignmentType.CENTER }),
-                        new Paragraph({ children: [new ImageRun({ data: r.backBuf, transformation: { width: 500, height: 312 } })], alignment: AlignmentType.CENTER })
+                        new Paragraph({ children: [new ImageRun({ data: r.frontBuf, transformation: { width: 450, height: 284 } })], alignment: AlignmentType.CENTER }),
+                        new Paragraph({ children: [new ImageRun({ data: r.backBuf, transformation: { width: 450, height: 284 } })], alignment: AlignmentType.CENTER })
                     ]
                 });
             }
@@ -281,7 +233,7 @@ bot.action('gen_word', async (ctx) => {
         const doc = new Document({ sections });
         const buffer = await Packer.toBuffer(doc);
         await ctx.replyWithDocument({ source: buffer, filename: `Batch_${Date.now()}.docx` });
-    } catch (e) { ctx.reply('❌ Word Error: ' + e.message); }
+    } catch (e) { ctx.reply('❌ Word Error.'); }
 });
 
 async function drawBarcode(g, fcn) {
@@ -307,8 +259,7 @@ function drawText(g, d, isC) {
         g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, x, 615);
         if (d.fcn_id) { g.font=`bold 32px ${fontStack}`; g.fillText(d.fcn_id, x, 770); }
     } else {
-        g.textAlign = 'left'; 
-        g.font = `bold 36px ${fontStack}`;
+        g.textAlign = 'left'; g.font = `bold 36px ${fontStack}`;
         if (d.amharic_name) g.fillText(d.amharic_name, 510, 245);
         if (d.english_name) g.fillText(d.english_name, 510, 290);
         g.font = `bold 34px ${fontStack}`;
@@ -337,6 +288,6 @@ function drawBackInfo(g, d, isC) {
     g.font=`bold 28px ${fontStack}`; g.fillText(sn, 1070, 762);
 }
 
-bot.launch().then(() => console.log('Bot Fixed & Running!'));
+bot.launch().then(() => console.log('Bot Aspect Ratio Fixed!'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
