@@ -202,7 +202,21 @@ async function renderAndSendSingleID(ctx, id, idx) {
             if (pImg) {
                 g.save();
                 g.filter = id.filter === 'bw' ? 'grayscale(100%) brightness(110%) contrast(110%)' : 'saturate(45%) brightness(100%) grayscale(74%) sepia(10%)';
-                g.drawImage(pImg, 55, 170, 440, 540); 
+                
+                // CSS object-fit: contain simulation
+                const cw = 440; const ch = 540;
+                const imgAspect = pImg.width / pImg.height;
+                const canvasAspect = cw / ch;
+                let drawW, drawH, drawX, drawY;
+                
+                if (imgAspect > canvasAspect) {
+                    drawW = cw; drawH = cw / imgAspect;
+                    drawX = 55; drawY = 170 + (ch - drawH) / 2;
+                } else {
+                    drawH = ch; drawW = ch * imgAspect;
+                    drawY = 170; drawX = 55 + (cw - drawW) / 2;
+                }
+                g.drawImage(pImg, drawX, drawY, drawW, drawH);
                 g.restore();
             }
             if (mImg) g.drawImage(mImg, 1030, 600, 100, 130);
@@ -270,29 +284,63 @@ bot.action('gen_word', async (ctx) => {
 
 async function drawBarcode(g, fcn) {
     try {
-        const bBuf = await bwipjs.toBuffer({ bcid: 'code128', text: fcn.replace(/\s/g,''), scale: 3, height: 10, backgroundcolor: 'FFFFFF' });
+        const bBuf = await bwipjs.toBuffer({ bcid: 'code128', text: fcn.replace(/\s/g,''), scale: 3, height: 16, includetext: false, backgroundcolor: 'FFFFFF' });
         const bImg = await loadImage(bBuf);
-        // Barcode block tightly matching web's dynamic sizing instead of huge fixed block
-        g.fillStyle='white'; 
-        // 570 left, 620 top to match web
-        g.fillRect(570, 620, 310, 110);
-        g.fillStyle='black'; g.font = `bold 24px "Arial", sans-serif`; g.textAlign='center';
-        g.textBaseline = 'top';
+        
+        g.font = `bold 24px "Arial", sans-serif`; 
         const spacing = 5;
         const text = fcn;
-        let x = 725 - (g.measureText(text).width + (text.length-1)*spacing)/2;
-        for(let i=0; i<text.length; i++) {
-            g.fillText(text[i], x, 630);
-            x += g.measureText(text[i]).width + spacing;
+        let textWidth = g.measureText(text).width + (text.length * spacing);
+        
+        // Exact web box calculation
+        const margin = 10;
+        const contentWidth = Math.max(textWidth, bImg.width + margin*2);
+        const boxWidth = contentWidth + 20; // 10px pad L/R
+        const boxHeight = 10 + 29 + 2 + margin + bImg.height + margin + 10;
+        
+        g.fillStyle = 'white';
+        g.fillRect(570, 620, boxWidth, boxHeight);
+        
+        const textStartX = 570 + 10 + (contentWidth - textWidth)/2;
+        g.fillStyle = 'black';
+        g.textBaseline = 'top';
+        let currX = textStartX;
+        for (let i = 0; i < text.length; i++) {
+            g.fillText(text[i], currX, 630);
+            currX += g.measureText(text[i]).width + spacing;
         }
-        g.drawImage(bImg, 582, 665, 286, 50);
+        
+        const barStartX = 570 + 10 + (contentWidth - bImg.width)/2;
+        g.drawImage(bImg, barStartX, 671, bImg.width, bImg.height);
     } catch (e) {}
+}
+
+function drawTextCSS(g, text, x, y, fontSize, lineHeight) {
+    g.textBaseline = 'top';
+    const halfLeading = (lineHeight - fontSize) / 2;
+    g.fillText(text, x, y + halfLeading);
+}
+
+function drawRotatedCSS(g, text, x, y, fontSize, lineHeight, rotationDeg) {
+    g.save();
+    g.translate(x, y); // HTML origin point
+    // origin-left pivot logic (0%, 50%)
+    const originY = lineHeight / 2;
+    g.translate(0, originY);
+    g.rotate(rotationDeg * Math.PI / 180);
+    g.translate(0, -originY);
+    
+    // Draw relative to new axes with line-height centering
+    g.textBaseline = 'top';
+    const halfLeading = (lineHeight - fontSize) / 2;
+    g.fillText(text, 0, halfLeading);
+    g.restore();
 }
 
 function drawText(g, d, isC) {
     g.fillStyle = 'black';
-    g.textBaseline = 'top';
     if (isC) {
+        g.textBaseline = 'top';
         g.textAlign = 'center'; const x = 640;
         g.font = `bold 36px ${fontStack}`;
         if (d.amharic_name) g.fillText(d.amharic_name, x, 250);
@@ -306,19 +354,20 @@ function drawText(g, d, isC) {
         g.textAlign = 'left'; 
         g.font = `bold 34px ${fontStack}`;
         
-        // Removed custom artificial +5 offsets to STRICTLY adehre to web coordinates
-        if (d.amharic_name) g.fillText(d.amharic_name, 510, 210);
-        if (d.english_name) g.fillText(d.english_name, 510, 254); // 210 + exactly 44px leading from tailwind
+        // Full Names with explicit leading-11 (44px line height)
+        drawTextCSS(g, d.amharic_name||'', 510, 210, 34, 44);
+        drawTextCSS(g, d.english_name||'', 510, 254, 34, 44); 
         
-        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374);
-        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457);
-        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542);
+        // Dates with implied default tailwind line-height (1.5 -> 51px)
+        drawTextCSS(g, `${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374, 34, 51);
+        drawTextCSS(g, `${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457, 34, 51);
+        drawTextCSS(g, `${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542, 34, 51);
         
         g.font = `bold 28px ${fontStack}`;
         
-        // Exact 26px left anchor matching style={{left: '26px'}}
-        g.save(); g.translate(26, 560); g.rotate(-Math.PI/2); g.fillText(d.issue_date_ethiopian||'',0,0); g.restore();
-        g.save(); g.translate(26, 200); g.rotate(-Math.PI/2); g.fillText(d.issue_date_gregorian||'',0,0); g.restore();
+        // Issue Dates with origin-left transform and default line height (28 * 1.5 = 42px)
+        drawRotatedCSS(g, d.issue_date_ethiopian||'', 26, 560, 28, 42, -90);
+        drawRotatedCSS(g, d.issue_date_gregorian||'', 26, 200, 28, 42, -90);
     }
 }
 
@@ -344,6 +393,6 @@ function drawBackInfo(g, d, isC) {
     g.fillText(sn, 1070, 800 - 35);
 }
 
-bot.launch().then(() => console.log('Bot Front Absolute Format Fixed!'));
+bot.launch().then(() => console.log('Bot CSS Layout Engine V8 Ready!'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
