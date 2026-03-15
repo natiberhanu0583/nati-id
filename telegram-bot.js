@@ -83,10 +83,32 @@ async function processId(ctx) {
             message += `**Issue Date:** ${data.issue_date_gregorian || 'N/A'}\n`;
             message += `**Expiry Date:** ${data.expiry_date_gregorian || 'N/A'}\n`;
             
-            ctx.replyWithMarkdown(message);
+            await ctx.replyWithMarkdown(message);
             
-            // If the user wants the "template", we could potentially send something else here.
-            ctx.reply('The information has been extracted. You can now use these details.');
+            // Send extracted images
+            if (data.images && Array.from(data.images).length > 0) {
+                ctx.reply('📥 **Sending Extracted Images...**');
+                
+                const mediaGroup = [];
+                const images = data.images.map(img => 
+                    img.startsWith('http') ? img : `https://api.affiliate.pro.et${img}`
+                );
+
+                for (let i = 0; i < images.length; i++) {
+                    const imgUrl = images[i];
+                    try {
+                        // Send as Photo for preview
+                        await ctx.replyWithPhoto(imgUrl, { caption: `Image ${i + 1}` });
+                        
+                        // Send as Document for high quality download
+                        await ctx.replyWithDocument(imgUrl, { filename: `extracted_id_part_${i + 1}.jpg` });
+                    } catch (e) {
+                        console.error(`Failed to send image ${i}:`, e.message);
+                    }
+                }
+            }
+
+            ctx.reply('✨ All images and data have been extracted.');
         } else {
             ctx.reply('❌ Failed to process the ID. Please try again.');
         }
