@@ -218,14 +218,14 @@ async function renderTemplates(ctx, data) {
 
         // Sidebar Issue Dates (Rotated)
         g.save();
-        g.translate(26, 560);
+        g.translate(46, 560);
         g.rotate(-Math.PI / 2);
         g.font = 'bold 28px "EbrimaBold", "Ebrima", "Arial"';
         g.fillText(data.issue_date_ethiopian || '', 0, 0);
         g.restore();
 
         g.save();
-        g.translate(26, 200);
+        g.translate(46, 200);
         g.rotate(-Math.PI / 2);
         g.font = 'bold 28px "EbrimaBold", "Ebrima", "Arial"';
         g.fillText(data.issue_date_gregorian || '', 0, 0);
@@ -304,7 +304,7 @@ async function renderTemplates(ctx, data) {
         const serialNumber = 'S' + Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
         g.font = 'bold 28px "EbrimaBold", "Ebrima", "Arial"';
         g.textAlign = 'left';
-        g.fillText(serialNumber, 1070, 773);
+        g.fillText(serialNumber, 1070, 750);
 
         // Send Back
         const backBuffer = canvas.toBuffer('image/jpeg', { quality: 0.9 });
