@@ -6,6 +6,7 @@ const { Telegraf, session, Markup } = require('telegraf');
 const axios = require('axios');
 const FormData = require('form-data');
 const { createCanvas, loadImage, registerFont } = require('canvas');
+const { Document, Packer, Paragraph, ImageRun, AlignmentType } = require('docx');
 
 // Register fonts
 try {
@@ -113,7 +114,8 @@ bot.action(['style_color', 'style_bw'], async (ctx) => {
     
     await ctx.editMessageText(`✅ ID Added! Total: ${ctx.session.allProcessedData.length}`, 
         Markup.inlineKeyboard([
-            [Markup.button.callback('➕ Add Another', 'add_more'), Markup.button.callback('📄 Bulk Shelf', 'gen_shelf')],
+            [Markup.button.callback('➕ Add Another', 'add_more')],
+            [Markup.button.callback('📄 Shelf (JPG)', 'gen_shelf'), Markup.button.callback('📝 Shelf (Word)', 'gen_word')],
             [Markup.button.callback('🔄 Restart', 'restart')]
         ])
     );
@@ -142,20 +144,14 @@ async function getCachedTemplate(name) {
     return templateCache[name] = await loadImage(path.join(__dirname, 'public', name));
 }
 
-bot.action('gen_shelf', async (ctx) => {
-    await ctx.answerCbQuery().catch(() => {});
-    const ids = ctx.session.allProcessedData;
-    if (!ids.length) return;
-
-    await ctx.reply(`🚀 Generating Bulk Shelf for ${ids.length} IDs... Parallel fetching active. ⏳`);
-    
-    // Efficiency: Pre-fetch ALL external images in parallel
+// Generate shared render function
+async function renderAllIDs(ids) {
+    // Pre-fetch ALL external images in parallel
     const externalImages = [];
     ids.forEach((id, idx) => {
         const pPath = id.data.images && (id.data.images[1] || id.data.images[0]);
         const mPath = id.data.images && id.data.images[0];
         const qPath = id.data.images && (id.data.images[3] || id.data.images[2]);
-        
         if (pPath) externalImages.push({ idx, type: 'profile', url: getFullUrl(pPath) });
         if (mPath) externalImages.push({ idx, type: 'mini', url: getFullUrl(mPath) });
         if (qPath) externalImages.push({ idx, type: 'qr', url: getFullUrl(qPath) });
@@ -171,49 +167,115 @@ bot.action('gen_shelf', async (ctx) => {
         } catch (e) { console.error(`Failed to fetch ${item.url}`); }
     }));
 
+    const results = [];
+    for (let i = 0; i < ids.length; i++) {
+        const id = ids[i];
+        const images = fetchedImages[i] || {};
+        
+        // Front Card
+        const fCanvas = createCanvas(1280, 800);
+        const f = fCanvas.getContext('2d');
+        const fTpl = await getCachedTemplate(id.template);
+        f.drawImage(fTpl, 0, 0);
+        if (images.profile) {
+            f.save();
+            f.filter = id.filter === 'bw' ? 'grayscale(100%)' : 'saturate(45%) brightness(100%) grayscale(74%) sepia(10%)';
+            f.drawImage(images.profile, 55, 170, 440, 540); 
+            f.restore();
+        }
+        if (images.mini) f.drawImage(images.mini, 1030, 600, 100, 130);
+        if (id.data.fcn_id) await drawBarcode(f, id.data.fcn_id);
+        drawText(f, id.data, id.template.includes('-c'));
+
+        // Back Card
+        const bCanvas = createCanvas(1280, 800);
+        const b = bCanvas.getContext('2d');
+        const bTpl = await getCachedTemplate(id.backTemplate);
+        b.drawImage(bTpl, 0, 0);
+        if (images.qr) { b.fillStyle='white'; b.fillRect(576, 40, 666, 650); b.drawImage(images.qr, 576, 40, 666, 650); }
+        drawBackInfo(b, id.data, id.template.includes('-c'));
+
+        results.push({
+            name: id.data.english_name || `ID_${i+1}`,
+            front: fCanvas.toBuffer('image/jpeg', { quality: 0.9 }),
+            back: bCanvas.toBuffer('image/jpeg', { quality: 0.9 })
+        });
+    }
+    return results;
+}
+
+bot.action('gen_shelf', async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {});
+    const ids = ctx.session.allProcessedData;
+    if (!ids.length) return;
+    await ctx.reply('🚀 Rendering Shelf... ⏳');
+
+    const rendered = await renderAllIDs(ids);
     const cardW = 1280, cardH = 800, pad = 40;
     const shelfH = (cardH * 2 * ids.length) + (pad * (ids.length * 2 + 1));
     const shelfCanvas = createCanvas(cardW + pad * 2, shelfH);
     const s = shelfCanvas.getContext('2d');
     s.fillStyle = '#FFFFFF'; s.fillRect(0, 0, shelfCanvas.width, shelfCanvas.height);
 
-    for (let i = 0; i < ids.length; i++) {
-        const id = ids[i];
+    for (let i = 0; i < rendered.length; i++) {
         const yTop = pad + (i * (cardH * 2 + pad * 2));
         const yBot = yTop + cardH + pad;
-        const images = fetchedImages[i] || {};
-
-        // Front
-        s.save(); s.translate(pad, yTop);
-        const fTpl = await getCachedTemplate(id.template);
-        s.drawImage(fTpl, 0, 0);
-        if (images.profile) {
-            s.save();
-            s.filter = id.filter === 'bw' ? 'grayscale(100%)' : 'saturate(45%) brightness(100%) grayscale(74%) sepia(10%)';
-            s.drawImage(images.profile, 55, 170, 440, 540); 
-            s.restore();
-        }
-        if (images.mini) s.drawImage(images.mini, 1030, 600, 100, 130);
-        if (id.data.fcn_id) await drawBarcode(s, id.data.fcn_id);
-        drawText(s, id.data, id.template.includes('-c'));
-        s.restore();
-
-        // Back
-        s.save(); s.translate(pad, yBot);
-        const bTpl = await getCachedTemplate(id.backTemplate);
-        s.drawImage(bTpl, 0, 0);
-        if (images.qr) { s.fillStyle='white'; s.fillRect(576, 40, 666, 650); s.drawImage(images.qr, 576, 40, 666, 650); }
-        drawBackInfo(s, id.data, id.template.includes('-c'));
-        s.restore();
+        const fImg = await loadImage(rendered[i].front);
+        const bImg = await loadImage(rendered[i].back);
+        s.drawImage(fImg, pad, yTop);
+        s.drawImage(bImg, pad, yBot);
+        
+        // Individual buttons for each person
+        await ctx.reply(`ID: ${rendered[i].name}`, Markup.inlineKeyboard([
+            [Markup.button.callback('⬇️ Download Front', `dl_f_${i}`), Markup.button.callback('⬇️ Download Back', `dl_b_${i}`)]
+        ]));
     }
 
     const buf = shelfCanvas.toBuffer('image/jpeg', { quality: 0.85 });
     await ctx.replyWithDocument({ source: buf, filename: `batch_${Date.now()}.jpg` });
+    // Store in session for download
+    ctx.session.lastRendered = rendered;
+});
+
+bot.action('gen_word', async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {});
+    const ids = ctx.session.allProcessedData;
+    if (!ids.length) return;
+    await ctx.reply('📝 Generating Word Document... ⏳');
+
+    const rendered = await renderAllIDs(ids);
+    const sections = [];
+    
+    for (const r of rendered) {
+        sections.push({
+            children: [
+                new Paragraph({ children: [new ImageRun({ data: r.front, transformation: { width: 500, height: 312 } })], alignment: AlignmentType.CENTER }),
+                new Paragraph({ children: [new ImageRun({ data: r.back, transformation: { width: 500, height: 312 } })], alignment: AlignmentType.CENTER })
+            ]
+        });
+    }
+
+    const doc = new Document({ sections });
+    const buffer = await Packer.toBuffer(doc);
+    await ctx.replyWithDocument({ source: buffer, filename: `Fayda_Batch_${Date.now()}.docx` });
+});
+
+bot.action(/^dl_(f|b)_(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {});
+    const type = ctx.match[1];
+    const idx = parseInt(ctx.match[2]);
+    const items = ctx.session.lastRendered;
+    if (!items || !items[idx]) return ctx.reply('Data expired. Please re-generate.');
+
+    const item = items[idx];
+    const buffer = type === 'f' ? item.front : item.back;
+    const name = `${item.name.replace(/\s+/g, '_')}_${type === 'f' ? 'Front' : 'Back'}.jpg`;
+    await ctx.replyWithDocument({ source: buffer, filename: name });
 });
 
 async function drawBarcode(g, fcn) {
     try {
-        const bBuf = await bwipjs.toBuffer({ bcid: 'code128', text: fcn.replace(/\s/g,''), scale: 3, height: 10, backgroundcolor: 'FFFFFF' });
+        const bBuf = await bwipjs.toBuffer({ bcid: 'code128', text: fcn.replace(/\s/g,''), scale: 1.5, height: 10, backgroundcolor: 'FFFFFF' });
         const bImg = await loadImage(bBuf);
         g.fillStyle='white'; g.fillRect(570, 620, 400, 120);
         g.fillStyle='black'; g.font='bold 24px "EbrimaBold"'; g.textAlign='center';
@@ -228,8 +290,7 @@ function drawText(g, d, isC) {
         if (d.amharic_name) g.fillText(d.amharic_name, 640, 275);
         if (d.english_name) g.fillText(d.english_name, 640, 315);
         g.font = 'bold 34px "EbrimaBold"';
-        const dob = `${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`;
-        g.fillText(dob, 640, 445);
+        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 640, 445);
         g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 640, 530);
         g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 640, 615);
         if (d.fcn_id) { g.font='bold 32px "EbrimaBold"'; g.fillText(d.fcn_id, 640, 770); }
@@ -238,8 +299,7 @@ function drawText(g, d, isC) {
         if (d.amharic_name) g.fillText(d.amharic_name, 510, 245);
         if (d.english_name) g.fillText(d.english_name, 510, 290);
         g.font = 'bold 34px "EbrimaBold"';
-        const dob = `${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`;
-        g.fillText(dob, 512, 408);
+        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 408);
         g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 491);
         g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 574);
         g.save(); g.translate(36, 560); g.rotate(-Math.PI/2); g.font='bold 28px "EbrimaBold"'; g.fillText(d.issue_date_ethiopian||'',0,0); g.restore();
@@ -264,6 +324,6 @@ function drawBackInfo(g, d, isC) {
     g.font='bold 28px "EbrimaBold"'; g.fillText(sn, 1070, 762);
 }
 
-bot.launch().then(() => console.log('Telegram Bot Optimized!'));
+bot.launch().then(() => console.log('Telegram Bot Optimized with Word/Named Export!'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
