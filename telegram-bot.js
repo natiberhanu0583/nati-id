@@ -29,16 +29,39 @@ const INITIAL_SESSION = {
     filterChoice: 'color', isC: false
 };
 
+const cancelBtn = Markup.button.callback('❌ Cancel', 'cancel_process');
+
 bot.start((ctx) => {
     ctx.session = { ...INITIAL_SESSION, allProcessedData: [] };
-    ctx.reply('Welcome! 🇪🇹 Upload **Image 1 (Popup/Photo + QR)**. (Or /skip)');
+    ctx.reply('Welcome! 🇪🇹 Upload **Image 1 (Popup/Photo + QR)**. (Or /skip)', Markup.inlineKeyboard([
+        [Markup.button.callback('⏭ Skip Image 1', 'skip_img'), cancelBtn]
+    ]));
+});
+
+bot.action('cancel_process', async (ctx) => {
+    ctx.session.step = 0;
+    ctx.session.images = [];
+    await ctx.answerCbQuery('Process Cancelled').catch(() => {});
+    await ctx.reply('❌ Process Cancelled. Send **Image 1** to start over:', Markup.inlineKeyboard([
+        [Markup.button.callback('⏭ Skip Image 1', 'skip_img')]
+    ]));
+});
+
+bot.action('skip_img', async (ctx) => {
+    if (!ctx.session || (ctx.session.step !== 0 && ctx.session.step !== 1)) return ctx.answerCbQuery();
+    ctx.session.images[ctx.session.step] = null;
+    ctx.session.step++;
+    await ctx.answerCbQuery().catch(() => {});
+    await ctx.reply(`Skipped. Upload **Image ${ctx.session.step + 1}**:`, Markup.inlineKeyboard([
+        [cancelBtn]
+    ]));
 });
 
 bot.command('skip', (ctx) => {
     if (!ctx.session || (ctx.session.step !== 0 && ctx.session.step !== 1)) return;
     ctx.session.images[ctx.session.step] = null;
     ctx.session.step++;
-    ctx.reply(`Skipped. Upload **Image ${ctx.session.step + 1}**.`);
+    ctx.reply(`Skipped. Upload **Image ${ctx.session.step + 1}**.`, Markup.inlineKeyboard([[cancelBtn]]));
 });
 
 bot.on('photo', async (ctx) => {
@@ -49,10 +72,10 @@ bot.on('photo', async (ctx) => {
     
     if (ctx.session.step === 0) {
         ctx.session.step = 1;
-        ctx.reply('✅ Image 1 received. Upload **Image 2 (Front)**.');
+        ctx.reply('✅ Image 1 received. Upload **Image 2 (Front)**:', Markup.inlineKeyboard([[cancelBtn]]));
     } else if (ctx.session.step === 1) {
         ctx.session.step = 2;
-        ctx.reply('✅ Image 2 received. Upload **Image 3 (Back)**.');
+        ctx.reply('✅ Image 2 received. Upload **Image 3 (Back)**:', Markup.inlineKeyboard([[cancelBtn]]));
     } else if (ctx.session.step === 2) {
         ctx.reply('🚀 Processing ID... ⏳');
         await processId(ctx);
@@ -77,11 +100,12 @@ async function processId(ctx) {
             await ctx.reply('✅ Extracted! Choose Template:', 
                 Markup.inlineKeyboard([
                     [Markup.button.callback('Template A', 'tpl_a'), Markup.button.callback('Template B', 'tpl_b')],
-                    [Markup.button.callback('Template C (Modern)', 'tpl_c')]
+                    [Markup.button.callback('Template C (Modern)', 'tpl_c')],
+                    [cancelBtn]
                 ])
             );
         }
-    } catch (e) { ctx.reply('❌ Error: ' + e.message); }
+    } catch (e) { ctx.reply('❌ Error: ' + e.message, Markup.inlineKeyboard([[cancelBtn]])); }
 }
 
 bot.action('tpl_c', async (ctx) => {
@@ -90,7 +114,8 @@ bot.action('tpl_c', async (ctx) => {
     ctx.session.isC = true;
     await ctx.answerCbQuery().catch(() => {});
     await ctx.editMessageText('Choose Photo Style:', Markup.inlineKeyboard([
-        [Markup.button.callback('🌈 Color', 'style_color'), Markup.button.callback('⚫️ B&W', 'style_bw')]
+        [Markup.button.callback('🌈 Color', 'style_color'), Markup.button.callback('⚫️ B&W', 'style_bw')],
+        [cancelBtn]
     ]));
 });
 
@@ -100,7 +125,8 @@ bot.action(['tpl_a', 'tpl_b'], async (ctx) => {
     ctx.session.isC = false;
     await ctx.answerCbQuery().catch(() => {});
     await ctx.editMessageText('Choose Photo Style:', Markup.inlineKeyboard([
-        [Markup.button.callback('🌈 Color', 'style_color'), Markup.button.callback('⚫️ B&W', 'style_bw')]
+        [Markup.button.callback('🌈 Color', 'style_color'), Markup.button.callback('⚫️ B&W', 'style_bw')],
+        [cancelBtn]
     ]));
 });
 
@@ -127,13 +153,17 @@ bot.action(['style_color', 'style_bw'], async (ctx) => {
 
 bot.action('add_more', async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
-    await ctx.reply('Upload **Image 1** for the next ID:');
+    await ctx.reply('Upload **Image 1** for the next ID:', Markup.inlineKeyboard([
+        [Markup.button.callback('⏭ Skip Image 1', 'skip_img'), cancelBtn]
+    ]));
 });
 
 bot.action('restart', async (ctx) => {
     ctx.session = { ...INITIAL_SESSION, allProcessedData: [] };
     await ctx.answerCbQuery().catch(() => {});
-    await ctx.reply('Cleared. Send **Image 1**:');
+    await ctx.reply('Cleared. Send **Image 1**:', Markup.inlineKeyboard([
+        [Markup.button.callback('⏭ Skip Image 1', 'skip_img')]
+    ]));
 });
 
 const templateCache = {};
@@ -279,7 +309,6 @@ function drawText(g, d, isC) {
         g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457 + o);
         g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542 + o);
         g.font = `bold 28px ${fontStack}`;
-        // Move to left small (Was 26, now 20)
         g.save(); g.translate(20, 560); g.rotate(-Math.PI/2); g.fillText(d.issue_date_ethiopian||'',0,0); g.restore();
         g.save(); g.translate(20, 200); g.rotate(-Math.PI/2); g.fillText(d.issue_date_gregorian||'',0,0); g.restore();
     }
@@ -300,16 +329,13 @@ function drawBackInfo(g, d, isC) {
     if (d.english_woreda) { g.fillText(d.english_woreda, 43, y); }
 
     g.textBaseline = 'bottom';
-    // User requested: move down so so small fin (Was 105, now 102)
     g.font = `bold 30px ${fontStack}`;
     if (d.fin_number) { g.fillText(d.fin_number, 171, 800 - 102); } 
-    
-    // SN location is considered perfect now
     const sn = 'S' + Math.floor(100000000 + Math.random() * 900000000).toString();
     g.font = `bold 28px ${fontStack}`; 
     g.fillText(sn, 1070, 800 - 35);
 }
 
-bot.launch().then(() => console.log('Bot Micro-Adjustments V6 Ready!'));
+bot.launch().then(() => console.log('Bot with Cancel Buttons Ready!'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
