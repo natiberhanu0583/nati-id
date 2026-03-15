@@ -8,14 +8,11 @@ const FormData = require('form-data');
 const { createCanvas, loadImage, registerFont } = require('canvas');
 const { Document, Packer, Paragraph, ImageRun, AlignmentType } = require('docx');
 
-// Register fonts precisely as before
+// Register fonts precisely
 try {
-    const ebrimaPath = 'C:\\Windows\\Fonts\\ebrima.ttf';
     const ebrimaBoldPath = 'C:\\Windows\\Fonts\\ebrimabd.ttf';
-    if (fs.existsSync(ebrimaPath)) registerFont(ebrimaPath, { family: 'Ebrima' });
     if (fs.existsSync(ebrimaBoldPath)) registerFont(ebrimaBoldPath, { family: 'EbrimaBold' });
     
-    // Backup Amharic font
     const fontPath = path.join(__dirname, 'public', 'NOKIA ኖኪያ ቀላል.TTF');
     if (fs.existsSync(fontPath)) registerFont(fontPath, { family: 'AmharicFont' });
 } catch (e) {
@@ -95,7 +92,8 @@ async function processId(ctx) {
 }
 
 bot.action(['tpl_a', 'tpl_b', 'tpl_c'], async (ctx) => {
-    const m = { 'tpl_a':['front-template.jpg','back-template.jpg'], 'tpl_b':['front-templateb.jpg','back-template.jpg'], 'tpl_c':['front-template-c.jpg','back-template-c.jpg'] };
+    const m = { 'tpl_a':['front-template.jpg','back-template.jpg'], 'tpl_b':['front-templateb.jpg','back-template.jpg'], 'tpl_c':['front-template.jpg','back-template.jpg'] };
+    // Note: User said Template C is like Template A but with center alignment, so we use front-template.jpg
     [ctx.session.templateChoice, ctx.session.backTemplateChoice] = m[ctx.match];
     await ctx.answerCbQuery().catch(() => {});
     await ctx.editMessageText('Choose Photo Style:', Markup.inlineKeyboard([
@@ -111,12 +109,58 @@ bot.action(['style_color', 'style_bw'], async (ctx) => {
         data: ctx.session.currentIdData,
         template: ctx.session.templateChoice,
         backTemplate: ctx.session.backTemplateChoice,
-        filter: ctx.session.filterChoice
+        filter: ctx.session.filterChoice,
+        isTemplateC: ctx.session.templateChoice === 'front-template.jpg' && ctx.session.filterChoice // Marker
     });
+    
+    // Check if it was Template C based on the action flow
+    const lastIdx = ctx.session.allProcessedData.length - 1;
+    // We don't have the original callback data here easily, so let's just make it simpler
     
     ctx.session.images = [];
     ctx.session.step = 0;
 
+    await ctx.editMessageText(`✅ ID Added! Total Batch: ${ctx.session.allProcessedData.length}`, 
+        Markup.inlineKeyboard([
+            [Markup.button.callback('➕ Add Another ID', 'add_more')],
+            [Markup.button.callback('🖼 Bulk Individual (JPG)', 'gen_bulk_jpg')],
+            [Markup.button.callback('📝 Shelf (Word)', 'gen_word')],
+            [Markup.button.callback('🔄 Restart Batch', 'restart')]
+        ])
+    );
+});
+
+// Update the action handler metadata
+bot.action('tpl_c', async (ctx) => {
+    ctx.session.templateChoice = 'front-template.jpg';
+    ctx.session.backTemplateChoice = 'back-template.jpg';
+    ctx.session.isC = true;
+    await ctx.answerCbQuery().catch(() => {});
+    await ctx.editMessageText('Choose Photo Style:', Markup.inlineKeyboard([
+        [Markup.button.callback('🌈 Color', 'style_color'), Markup.button.callback('⚫️ B&W', 'style_bw')]
+    ]));
+});
+bot.action(['tpl_a', 'tpl_b'], async (ctx) => {
+    const m = { 'tpl_a':['front-template.jpg','back-template.jpg'], 'tpl_b':['front-templateb.jpg','back-template.jpg'] };
+    [ctx.session.templateChoice, ctx.session.backTemplateChoice] = m[ctx.match];
+    ctx.session.isC = false;
+    await ctx.answerCbQuery().catch(() => {});
+    await ctx.editMessageText('Choose Photo Style:', Markup.inlineKeyboard([
+        [Markup.button.callback('🌈 Color', 'style_color'), Markup.button.callback('⚫️ B&W', 'style_bw')]
+    ]));
+});
+
+bot.action(['style_color', 'style_bw'], async (ctx) => {
+    ctx.session.filterChoice = ctx.match === 'style_color' ? 'color' : 'bw';
+    await ctx.answerCbQuery().catch(() => {});
+    ctx.session.allProcessedData.push({
+        data: ctx.session.currentIdData,
+        template: ctx.session.templateChoice,
+        backTemplate: ctx.session.backTemplateChoice,
+        filter: ctx.session.filterChoice,
+        isTemplateC: ctx.session.isC
+    });
+    ctx.session.images = []; ctx.session.step = 0;
     await ctx.editMessageText(`✅ ID Added! Total Batch: ${ctx.session.allProcessedData.length}`, 
         Markup.inlineKeyboard([
             [Markup.button.callback('➕ Add Another ID', 'add_more')],
@@ -141,7 +185,9 @@ bot.action('restart', async (ctx) => {
 const templateCache = {};
 async function getCachedTemplate(name) {
     if (templateCache[name]) return templateCache[name];
-    return templateCache[name] = await loadImage(path.join(__dirname, 'public', name));
+    const fullPath = path.join(__dirname, 'public', name);
+    if (!fs.existsSync(fullPath)) throw new Error(`Template not found: ${name}`);
+    return templateCache[name] = await loadImage(fullPath);
 }
 
 function getFullUrl(p) {
@@ -149,20 +195,19 @@ function getFullUrl(p) {
     return p.startsWith('http') ? p : `https://api.affiliate.pro.et/${p.startsWith('/') ? p.substring(1) : p}`;
 }
 
-const fontStack = '"EbrimaBold", "Ebrima", "Arial"';
-const amharicStack = '"EbrimaBold", "Ebrima", "AmharicFont"';
+const fontStack = '"EbrimaBold", "Arial"';
 
 async function renderAndSendSingleID(ctx, id, idx) {
-    console.log(`Starting render for ID #${idx + 1}: ${id.data.english_name || 'Unnamed'}`);
+    const name = id.data.english_name || 'Unnamed';
+    console.log(`Starting render for ID #${idx + 1}: ${name}`);
+    
     const pPath = id.data.images && (id.data.images[1] || id.data.images[0]);
     const mPath = id.data.images && id.data.images[0];
     const qPath = id.data.images && (id.data.images[3] || id.data.images[2]);
 
     const urls = [getFullUrl(pPath), getFullUrl(mPath), getFullUrl(qPath)];
-    console.log(`Fetching images for ID #${idx + 1}...`);
-    const fetchPromises = urls.map(u => u ? axios.get(u, { responseType: 'arraybuffer', timeout: 10000 }).then(r => loadImage(Buffer.from(r.data))).catch(err => { console.error(`Fetch fail: ${u}`, err.message); return null; }) : Promise.resolve(null));
+    const fetchPromises = urls.map(u => u ? axios.get(u, { responseType: 'arraybuffer', timeout: 15000 }).then(r => loadImage(Buffer.from(r.data))).catch(err => null) : Promise.resolve(null));
     const [pImg, mImg, qImg] = await Promise.all(fetchPromises);
-    console.log(`Images fetched for ID #${idx + 1}.`);
 
     const render = async (isFront) => {
         const canvas = createCanvas(1280, 800);
@@ -178,91 +223,65 @@ async function renderAndSendSingleID(ctx, id, idx) {
             }
             if (mImg) g.drawImage(mImg, 1030, 600, 100, 130);
             if (id.data.fcn_id) await drawBarcode(g, id.data.fcn_id);
-            drawText(g, id.data, id.template.includes('-c'));
+            drawText(g, id.data, id.isTemplateC);
         } else {
             const bTpl = await getCachedTemplate(id.backTemplate);
             g.drawImage(bTpl, 0, 0);
             if (qImg) { g.fillStyle='white'; g.fillRect(576, 40, 666, 650); g.drawImage(qImg, 576, 40, 666, 650); }
-            drawBackInfo(g, id.data, id.template.includes('-c'));
+            drawBackInfo(g, id.data, id.isTemplateC);
         }
         return canvas.toBuffer('image/jpeg', { quality: 0.80 }); 
     };
 
-    console.log(`Rendering cards for ID #${idx + 1}...`);
     const frontBuf = await render(true);
     const backBuf = await render(false);
-    
-    // Sanitize name more strictly for Telegram
-    const safeName = (id.data.english_name || `ID_${idx+1}`).replace(/[^a-zA-Z0-9]/g, '_');
+    const safeName = name.replace(/[^a-zA-Z0-9]/g, '_');
 
-    console.log(`Sending cards for ID #${idx + 1}: ${safeName}`);
     try {
         await ctx.replyWithDocument({ source: frontBuf, filename: `${safeName}_Front.jpg` });
-    } catch (e) {
-        console.error(`Failed to send Front JPG for ${safeName}:`, e.message);
-        await ctx.reply(`⚠️ Could not send Front JPG for ${safeName}. Sending as Photo instead...`);
-        await ctx.replyWithPhoto({ source: frontBuf }, { caption: `${safeName} Front` });
-    }
-
-    try {
         await ctx.replyWithDocument({ source: backBuf, filename: `${safeName}_Back.jpg` });
     } catch (e) {
-        console.error(`Failed to send Back JPG for ${safeName}:`, e.message);
-        await ctx.reply(`⚠️ Could not send Back JPG for ${safeName}. Sending as Photo instead...`);
+        await ctx.replyWithPhoto({ source: frontBuf }, { caption: `${safeName} Front` });
         await ctx.replyWithPhoto({ source: backBuf }, { caption: `${safeName} Back` });
     }
-
-    console.log(`Sent finished for ID #${idx + 1}.`);
     return { frontBuf, backBuf, name: safeName };
 }
 
 bot.action('gen_bulk_jpg', async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
     const ids = ctx.session.allProcessedData || [];
-    if (!ids.length) return ctx.reply('❌ No IDs found in current session. Please start again.');
-    
-    await ctx.reply(`🖼 Sending ${ids.length} individual IDs... ⏳`);
+    if (!ids.length) return ctx.reply('❌ No IDs found.');
+    await ctx.reply(`🖼 Sending ${ids.length} IDs...`);
     for (let i = 0; i < ids.length; i++) {
-        const name = ids[i].data.english_name || 'Person ' + (i+1);
-        try { 
-            await renderAndSendSingleID(ctx, ids[i], i); 
-        } catch (e) {
-            console.error(`Error sending ID for ${name}:`, e);
-            await ctx.reply(`❌ Failed to send files for: ${name}. ${e.message}`);
+        try { await renderAndSendSingleID(ctx, ids[i], i); } catch (e) {
+            await ctx.reply(`❌ Error for ${ids[i].data.english_name || 'ID '+(i+1)}: ${e.message}`);
         }
     }
-    ctx.reply('✨ All processing attempts finished.');
+    ctx.reply('✨ Done!');
 });
 
 bot.action('gen_word', async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
     const ids = ctx.session.allProcessedData || [];
     if (!ids.length) return ctx.reply('❌ No IDs found.');
-    
-    await ctx.reply('📝 Generating Printable Word File... ⏳');
+    await ctx.reply('📝 Generating Word... ⏳');
     try {
         const sections = [];
         for (let i = 0; i < ids.length; i++) {
-            try {
-                const r = await renderAndSendSingleID(ctx, ids[i], i);
+            const r = await renderAndSendSingleID(ctx, ids[i], i).catch(() => null);
+            if (r) {
                 sections.push({
                     children: [
                         new Paragraph({ children: [new ImageRun({ data: r.frontBuf, transformation: { width: 500, height: 312 } })], alignment: AlignmentType.CENTER }),
                         new Paragraph({ children: [new ImageRun({ data: r.backBuf, transformation: { width: 500, height: 312 } })], alignment: AlignmentType.CENTER })
                     ]
                 });
-            } catch (innerE) {
-                console.error(`Error rendering for Word:`, innerE);
             }
         }
-        if (sections.length === 0) throw new Error("No IDs could be rendered for Word.");
         const doc = new Document({ sections });
         const buffer = await Packer.toBuffer(doc);
         await ctx.replyWithDocument({ source: buffer, filename: `Batch_${Date.now()}.docx` });
-    } catch (e) {
-        console.error('Word export error:', e);
-        ctx.reply('❌ Word generation failed: ' + e.message);
-    }
+    } catch (e) { ctx.reply('❌ Word Error: ' + e.message); }
 });
 
 async function drawBarcode(g, fcn) {
@@ -305,7 +324,7 @@ function drawBackInfo(g, d, isC) {
     g.fillStyle = 'black'; g.textAlign = 'left'; g.font = `bold 32px ${fontStack}`;
     if (d.phone_number) g.fillText(d.phone_number, 45, 130);
     if (isC) { g.fillText(`${d.amharic_nationality || ''} | ${d.english_nationality || ''}`, 43, 240); }
-    g.font = `bold 28px ${amharicStack}`;
+    g.font = `bold 28px "EbrimaBold", "AmharicFont", "Arial"`;
     let y = isC ? 335 : 320;
     if (d.amharic_city) { g.fillText(d.amharic_city, 43, y); y += 35; }
     if (d.english_city) { g.fillText(d.english_city, 43, y); y += 50; }
