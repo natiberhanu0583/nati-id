@@ -149,7 +149,7 @@ function getFullUrl(p) {
     return p.startsWith('http') ? p : `https://api.affiliate.pro.et/${p.startsWith('/') ? p.substring(1) : p}`;
 }
 
-const fontStack = '"EbrimaBold", "Arial"';
+const fontStack = '"EbrimaBold", "AmharicFont", "Arial"';
 const ID_W = 1280;
 const ID_H = 800; // Exact web height
 
@@ -188,7 +188,7 @@ async function renderAndSendSingleID(ctx, id, idx) {
             }
             drawBackInfo(g, id.data, id.isTemplateC);
         }
-        return canvas.toBuffer('image/jpeg', { quality: 0.92 }); 
+        return canvas.toBuffer('image/jpeg', { quality: 0.95 }); 
     };
 
     const frontBuf = await render(true);
@@ -210,7 +210,7 @@ bot.action('gen_bulk_jpg', async (ctx) => {
     if (!ids.length) return ctx.reply('❌ No IDs found.');
     await ctx.reply(`🖼 Processing ${ids.length} individual IDs...`);
     for (let i = 0; i < ids.length; i++) {
-        try { await renderAndSendSingleID(ctx, ids[i], i); } catch (e) { console.error(e); }
+        try { await renderAndSendSingleID(ctx, ids[i], i); } catch (e) {}
     }
     ctx.reply('✨ Done!');
 });
@@ -242,11 +242,19 @@ async function drawBarcode(g, fcn) {
     try {
         const bBuf = await bwipjs.toBuffer({ bcid: 'code128', text: fcn.replace(/\s/g,''), scale: 3, height: 10, backgroundcolor: 'FFFFFF' });
         const bImg = await loadImage(bBuf);
-        // Container exactly as web: top 620, left 570
         g.fillStyle='white'; g.fillRect(570, 620, 400, 120);
         g.fillStyle='black'; g.font = `bold 24px ${fontStack}`; g.textAlign='center';
         g.textBaseline = 'top';
-        g.fillText(fcn, 770, 625);
+        
+        // Simulating letter-spacing 5px
+        const spacing = 5;
+        const text = fcn;
+        let x = 770 - (g.measureText(text).width + (text.length-1)*spacing)/2;
+        for(let i=0; i<text.length; i++) {
+            g.fillText(text[i], x, 630); // 620+10 padding
+            x += g.measureText(text[i]).width + spacing;
+        }
+        
         g.drawImage(bImg, 595, 660, 350, 60);
     } catch (e) {}
 }
@@ -254,6 +262,8 @@ async function drawBarcode(g, fcn) {
 function drawText(g, d, isC) {
     g.fillStyle = 'black';
     g.textBaseline = 'top';
+    const o = 5; // Vertical offset to center within 44px leading (44-34)/2 = 5
+    
     if (isC) {
         g.textAlign = 'center'; const x = 640;
         g.font = `bold 36px ${fontStack}`;
@@ -266,23 +276,15 @@ function drawText(g, d, isC) {
         if (d.fcn_id) { g.font=`bold 32px ${fontStack}`; g.fillText(d.fcn_id, x, 750); }
     } else {
         g.textAlign = 'left'; 
-        // ABSOLUTE FORMAT MIRRORING WEB (1280x800)
         g.font = `bold 34px ${fontStack}`;
         
-        // Full Name at 210, 510
-        if (d.amharic_name) g.fillText(d.amharic_name, 510, 210);
-        if (d.english_name) g.fillText(d.english_name, 510, 254); // +44px leading
+        if (d.amharic_name) g.fillText(d.amharic_name, 510, 210 + o);
+        if (d.english_name) g.fillText(d.english_name, 510, 210 + 44 + o); // leading-11 (44px)
         
-        // DOB at 374, 512
-        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374);
+        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374 + o);
+        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457 + o);
+        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542 + o);
         
-        // Sex at 457, 512
-        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457);
-        
-        // Expiry at 542, 512
-        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542);
-        
-        // Issue Dates (Side Rails)
         g.font = `bold 28px ${fontStack}`;
         g.save(); g.translate(26, 560); g.rotate(-Math.PI/2); g.fillText(d.issue_date_ethiopian||'',0,0); g.restore();
         g.save(); g.translate(26, 200); g.rotate(-Math.PI/2); g.fillText(d.issue_date_gregorian||'',0,0); g.restore();
@@ -291,41 +293,31 @@ function drawText(g, d, isC) {
 
 function drawBackInfo(g, d, isC) {
     g.fillStyle = 'black'; g.textAlign = 'left'; g.textBaseline = 'top';
-    
-    // Web: top 93, left 40
     g.font = `bold 32px ${fontStack}`;
     if (d.phone_number) g.fillText(d.phone_number, 40, 93);
     
-    // Web Address: left 43, top 290
-    g.font = `bold 32px "EbrimaBold", "AmharicFont", "Arial"`;
+    g.font = `bold 32px ${fontStack}`;
     let y = 290;
+    if (isC && d.amharic_nationality) { g.fillText(`${d.amharic_nationality} | ${d.english_nationality}`, 43, 220); }
     
-    const fields = [
-        [d.amharic_city, 30],
-        [d.english_city, 45],
-        [d.amharic_sub_city, 30],
-        [d.english_sub_city, 45],
-        [d.amharic_woreda, 30],
-        [d.english_woreda, 0]
-    ];
-    
-    fields.forEach(([txt, gap]) => {
-        if (txt) {
-            g.fillText(txt, 43, y);
-            y += gap;
-        }
-    });
+    // Adjusted increments to honor web margin behavior
+    if (d.amharic_city) { g.fillText(d.amharic_city, 43, y); y += 28; } 
+    if (d.english_city) { g.fillText(d.english_city, 43, y); y += 52; }
+    if (d.amharic_sub_city) { g.fillText(d.amharic_sub_city, 43, y); y += 28; }
+    if (d.english_sub_city) { g.fillText(d.english_sub_city, 43, y); y += 52; }
+    if (d.amharic_woreda) { g.fillText(d.amharic_woreda, 43, y); y += 28; }
+    if (d.english_woreda) { g.fillText(d.english_woreda, 43, y); }
 
-    // FIN: bottom 113 (top 687)
+    // Baseline fixes for bottom coordinates
+    g.textBaseline = 'bottom';
     g.font = `bold 30px ${fontStack}`;
-    if (d.fin_number) { g.fillText(d.fin_number, 171, 687); }
+    if (d.fin_number) { g.fillText(d.fin_number, 171, 800 - 113); }
     
-    // Serial: bottom 27 (top 773)
     const sn = 'S' + Math.floor(100000000 + Math.random() * 900000000).toString();
     g.font = `bold 28px ${fontStack}`; 
-    g.fillText(sn, 1070, 773);
+    g.fillText(sn, 1070, 800 - 27);
 }
 
-bot.launch().then(() => console.log('Bot Final Absolute Match V4 Ready!'));
+bot.launch().then(() => console.log('Bot Final Absolute Perfection V5 Ready!'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
