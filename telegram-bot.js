@@ -10,13 +10,9 @@ const { Document, Packer, Paragraph, ImageRun, AlignmentType } = require('docx')
 
 // Register fonts
 try {
-    const ebrimaPath = 'C:\\Windows\\Fonts\\ebrima.ttf';
     const ebrimaBoldPath = 'C:\\Windows\\Fonts\\ebrimabd.ttf';
-    if (fs.existsSync(ebrimaPath)) registerFont(ebrimaPath, { family: 'Ebrima' });
     if (fs.existsSync(ebrimaBoldPath)) registerFont(ebrimaBoldPath, { family: 'EbrimaBold' });
-} catch (e) {
-    console.error('Font registration failed:', e.message);
-}
+} catch (e) {}
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 bot.use(session());
@@ -25,7 +21,7 @@ const JWT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OTY0YTky
 const API_URL = "https://api.affiliate.pro.et/api/v1/process-screenshots";
 
 const INITIAL_SESSION = { 
-    step: 0, images: [], data: null, allProcessedData: [],
+    step: 0, images: [], allProcessedData: [],
     templateChoice: 'front-template.jpg',
     backTemplateChoice: 'back-template.jpg',
     filterChoice: 'color'
@@ -40,8 +36,7 @@ bot.command('skip', (ctx) => {
     if (!ctx.session || (ctx.session.step !== 0 && ctx.session.step !== 1)) return;
     ctx.session.images[ctx.session.step] = null;
     ctx.session.step++;
-    const nextMsg = ctx.session.step === 1 ? 'Upload **Image 2 (Front)**.' : 'Upload **Image 3 (Back)**.';
-    ctx.reply('Skipped. ' + nextMsg);
+    ctx.reply(`Skipped. Upload **Image ${ctx.session.step + 1}**.`);
 });
 
 bot.on('photo', async (ctx) => {
@@ -65,9 +60,7 @@ bot.on('photo', async (ctx) => {
 async function processId(ctx) {
     try {
         const formData = new FormData();
-        const urls = ctx.session.images;
-        
-        const buffers = await Promise.all(urls.map(url => 
+        const buffers = await Promise.all(ctx.session.images.map(url => 
             url ? axios.get(url, { responseType: 'arraybuffer' }).then(r => Buffer.from(r.data)) : Promise.resolve(null)
         ));
 
@@ -83,9 +76,8 @@ async function processId(ctx) {
             ctx.session.currentIdData = response.data;
             await ctx.reply('✅ Extracted! Choose Template:', 
                 Markup.inlineKeyboard([
-                    [Markup.button.callback('Template A', 'tpl_a')],
-                    [Markup.button.callback('Template B', 'tpl_b')],
-                    [Markup.button.callback('Template C', 'tpl_c')]
+                    [Markup.button.callback('Template A', 'tpl_a'), Markup.button.callback('Template B', 'tpl_b')],
+                    [Markup.button.callback('Template C (Modern)', 'tpl_c')]
                 ])
             );
         }
@@ -96,7 +88,7 @@ bot.action(['tpl_a', 'tpl_b', 'tpl_c'], async (ctx) => {
     const m = { 'tpl_a':['front-template.jpg','back-template.jpg'], 'tpl_b':['front-templateb.jpg','back-template.jpg'], 'tpl_c':['front-template-c.jpg','back-template-c.jpg'] };
     [ctx.session.templateChoice, ctx.session.backTemplateChoice] = m[ctx.match];
     await ctx.answerCbQuery().catch(() => {});
-    await ctx.editMessageText('Choose Style:', Markup.inlineKeyboard([
+    await ctx.editMessageText('Choose Photo Style:', Markup.inlineKeyboard([
         [Markup.button.callback('🌈 Color', 'style_color'), Markup.button.callback('⚫️ B&W', 'style_bw')]
     ]));
 });
@@ -112,32 +104,21 @@ bot.action(['style_color', 'style_bw'], async (ctx) => {
         filter: ctx.session.filterChoice
     });
     
-    await ctx.editMessageText(`✅ ID Added! Total: ${ctx.session.allProcessedData.length}`, 
+    // Clear images from session to save memory
+    ctx.session.images = [];
+    ctx.session.step = 0;
+
+    await ctx.editMessageText(`✅ ID Added! Total Batch: ${ctx.session.allProcessedData.length}`, 
         Markup.inlineKeyboard([
-            [Markup.button.callback('➕ Add Another', 'add_more')],
-            [Markup.button.callback('🖼 Bulk Individual (JPG)', 'gen_bulk_jpg'), Markup.button.callback('📝 Shelf (Word)', 'gen_word')],
-            [Markup.button.callback('🔄 Restart', 'restart')]
+            [Markup.button.callback('➕ Add Another ID', 'add_more')],
+            [Markup.button.callback('🖼 Bulk Individual (JPG)', 'gen_bulk_jpg')],
+            [Markup.button.callback('📝 Shelf (Word)', 'gen_word')],
+            [Markup.button.callback('🔄 Restart Batch', 'restart')]
         ])
     );
 });
 
-bot.action('gen_bulk_jpg', async (ctx) => {
-    await ctx.answerCbQuery().catch(() => {});
-    const ids = ctx.session.allProcessedData;
-    if (!ids.length) return;
-    await ctx.reply(`🖼 Sending ${ids.length * 2} individual files... ⏳`);
-
-    const rendered = await renderAllIDs(ids);
-    for (const r of rendered) {
-        const safeName = r.name.replace(/\s+/g, '_');
-        await ctx.replyWithDocument({ source: r.front, filename: `${safeName}_Front.jpg` });
-        await ctx.replyWithDocument({ source: r.back, filename: `${safeName}_Back.jpg` });
-    }
-    ctx.reply('✨ All individual files sent!');
-});
-
 bot.action('add_more', async (ctx) => {
-    ctx.session.step = 0; ctx.session.images = [];
     await ctx.answerCbQuery().catch(() => {});
     await ctx.reply('Upload **Image 1** for the next ID:');
 });
@@ -148,112 +129,101 @@ bot.action('restart', async (ctx) => {
     await ctx.reply('Cleared. Send **Image 1**:');
 });
 
-function getFullUrl(p) {
-    if (!p) return null;
-    return p.startsWith('http') ? p : `https://api.affiliate.pro.et/${p.startsWith('/') ? p.substring(1) : p}`;
-}
-
 const templateCache = {};
 async function getCachedTemplate(name) {
     if (templateCache[name]) return templateCache[name];
     return templateCache[name] = await loadImage(path.join(__dirname, 'public', name));
 }
 
-// Generate shared render function
-async function renderAllIDs(ids) {
-    // Pre-fetch ALL external images in parallel
-    const externalImages = [];
-    ids.forEach((id, idx) => {
-        const pPath = id.data.images && (id.data.images[1] || id.data.images[0]);
-        const mPath = id.data.images && id.data.images[0];
-        const qPath = id.data.images && (id.data.images[3] || id.data.images[2]);
-        if (pPath) externalImages.push({ idx, type: 'profile', url: getFullUrl(pPath) });
-        if (mPath) externalImages.push({ idx, type: 'mini', url: getFullUrl(mPath) });
-        if (qPath) externalImages.push({ idx, type: 'qr', url: getFullUrl(qPath) });
-    });
-
-    const fetchedImages = {};
-    await Promise.all(externalImages.map(async (item) => {
-        try {
-            const res = await axios.get(item.url, { responseType: 'arraybuffer' });
-            const img = await loadImage(Buffer.from(res.data));
-            if (!fetchedImages[item.idx]) fetchedImages[item.idx] = {};
-            fetchedImages[item.idx][item.type] = img;
-        } catch (e) { console.error(`Failed to fetch ${item.url}`); }
-    }));
-
-    const results = [];
-    for (let i = 0; i < ids.length; i++) {
-        const id = ids[i];
-        const images = fetchedImages[i] || {};
-        
-        // Front Card
-        const fCanvas = createCanvas(1280, 800);
-        const f = fCanvas.getContext('2d');
-        const fTpl = await getCachedTemplate(id.template);
-        f.drawImage(fTpl, 0, 0);
-        if (images.profile) {
-            f.save();
-            f.filter = id.filter === 'bw' ? 'grayscale(100%)' : 'saturate(45%) brightness(100%) grayscale(74%) sepia(10%)';
-            f.drawImage(images.profile, 55, 170, 440, 540); 
-            f.restore();
-        }
-        if (images.mini) f.drawImage(images.mini, 1030, 600, 100, 130);
-        if (id.data.fcn_id) await drawBarcode(f, id.data.fcn_id);
-        drawText(f, id.data, id.template.includes('-c'));
-
-        // Back Card
-        const bCanvas = createCanvas(1280, 800);
-        const b = bCanvas.getContext('2d');
-        const bTpl = await getCachedTemplate(id.backTemplate);
-        b.drawImage(bTpl, 0, 0);
-        if (images.qr) { b.fillStyle='white'; b.fillRect(576, 40, 666, 650); b.drawImage(images.qr, 576, 40, 666, 650); }
-        drawBackInfo(b, id.data, id.template.includes('-c'));
-
-        results.push({
-            name: id.data.english_name || `ID_${i+1}`,
-            front: fCanvas.toBuffer('image/jpeg', { quality: 0.9 }),
-            back: bCanvas.toBuffer('image/jpeg', { quality: 0.9 })
-        });
-    }
-    return results;
+function getFullUrl(p) {
+    if (!p) return null;
+    return p.startsWith('http') ? p : `https://api.affiliate.pro.et/${p.startsWith('/') ? p.substring(1) : p}`;
 }
 
+async function renderAndSendSingleID(ctx, id, idx) {
+    const pPath = id.data.images && (id.data.images[1] || id.data.images[0]);
+    const mPath = id.data.images && id.data.images[0];
+    const qPath = id.data.images && (id.data.images[3] || id.data.images[2]);
+
+    const urls = [getFullUrl(pPath), getFullUrl(mPath), getFullUrl(qPath)];
+    const fetchPromises = urls.map(u => u ? axios.get(u, { responseType: 'arraybuffer', timeout: 5000 }).then(r => loadImage(Buffer.from(r.data))).catch(() => null) : Promise.resolve(null));
+    const [pImg, mImg, qImg] = await Promise.all(fetchPromises);
+
+    const render = async (isFront) => {
+        const canvas = createCanvas(1280, 800);
+        const g = canvas.getContext('2d');
+        if (isFront) {
+            const tpl = await getCachedTemplate(id.template);
+            g.drawImage(tpl, 0, 0);
+            if (pImg) {
+                g.save();
+                g.filter = id.filter === 'bw' ? 'grayscale(100%) brightness(110%)' : 'saturate(45%) brightness(100%) grayscale(74%) sepia(10%)';
+                g.drawImage(pImg, 55, 170, 440, 540); 
+                g.restore();
+            }
+            if (mImg) g.drawImage(mImg, 1030, 600, 100, 130);
+            if (id.data.fcn_id) await drawBarcode(g, id.data.fcn_id);
+            drawText(g, id.data, id.template.includes('-c'));
+        } else {
+            const bTpl = await getCachedTemplate(id.backTemplate);
+            g.drawImage(bTpl, 0, 0);
+            if (qImg) { g.fillStyle='white'; g.fillRect(576, 40, 666, 650); g.drawImage(qImg, 576, 40, 666, 650); }
+            drawBackInfo(g, id.data, id.template.includes('-c'));
+        }
+        return canvas.toBuffer('image/jpeg', { quality: 0.75 }); // Optimized quality for speed
+    };
+
+    const frontBuf = await render(true);
+    const backBuf = await render(false);
+    const safeName = (id.data.english_name || `ID_${idx+1}`).replace(/\s+/g, '_');
+
+    await ctx.replyWithDocument({ source: frontBuf, filename: `${safeName}_Front.jpg` });
+    await ctx.replyWithDocument({ source: backBuf, filename: `${safeName}_Back.jpg` });
+    return { frontBuf, backBuf, name: safeName };
+}
+
+bot.action('gen_bulk_jpg', async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {});
+    const ids = ctx.session.allProcessedData;
+    if (!ids.length) return;
+    
+    await ctx.reply(`🖼 Starting download for ${ids.length} persons... ⏳`);
+    for (let i = 0; i < ids.length; i++) {
+        await ctx.reply(`⏳ Generating files for: ${ids[i].data.english_name || 'Person ' + (i+1)}...`);
+        try {
+            await renderAndSendSingleID(ctx, ids[i], i);
+        } catch (e) {
+            await ctx.reply(`❌ Failed to send files for ID #${i+1}`);
+        }
+    }
+    ctx.reply('✨ Bulk individual files sent successfully!');
+});
 
 bot.action('gen_word', async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
     const ids = ctx.session.allProcessedData;
     if (!ids.length) return;
-    await ctx.reply('📝 Generating Word Document... ⏳');
-
-    const rendered = await renderAllIDs(ids);
-    const sections = [];
     
-    for (const r of rendered) {
-        sections.push({
-            children: [
-                new Paragraph({ children: [new ImageRun({ data: r.front, transformation: { width: 500, height: 312 } })], alignment: AlignmentType.CENTER }),
-                new Paragraph({ children: [new ImageRun({ data: r.back, transformation: { width: 500, height: 312 } })], alignment: AlignmentType.CENTER })
-            ]
-        });
+    await ctx.reply('📝 Generating Printable Word File... ⏳');
+    try {
+        const sections = [];
+        for (let i = 0; i < ids.length; i++) {
+            const rendered = await renderAndSendSingleID(ctx, ids[i], i).catch(() => null);
+            if (rendered) {
+                sections.push({
+                    children: [
+                        new Paragraph({ children: [new ImageRun({ data: rendered.frontBuf, transformation: { width: 500, height: 312 } })], alignment: AlignmentType.CENTER }),
+                        new Paragraph({ children: [new ImageRun({ data: rendered.backBuf, transformation: { width: 500, height: 312 } })], alignment: AlignmentType.CENTER })
+                    ]
+                });
+            }
+        }
+        const doc = new Document({ sections });
+        const buffer = await Packer.toBuffer(doc);
+        await ctx.replyWithDocument({ source: buffer, filename: `Batch_${Date.now()}.docx` });
+    } catch (e) {
+        ctx.reply('❌ Word generation failed.');
     }
-
-    const doc = new Document({ sections });
-    const buffer = await Packer.toBuffer(doc);
-    await ctx.replyWithDocument({ source: buffer, filename: `Fayda_Batch_${Date.now()}.docx` });
-});
-
-bot.action(/^dl_(f|b)_(\d+)$/, async (ctx) => {
-    await ctx.answerCbQuery().catch(() => {});
-    const type = ctx.match[1];
-    const idx = parseInt(ctx.match[2]);
-    const items = ctx.session.lastRendered;
-    if (!items || !items[idx]) return ctx.reply('Data expired. Please re-generate.');
-
-    const item = items[idx];
-    const buffer = type === 'f' ? item.front : item.back;
-    const name = `${item.name.replace(/\s+/g, '_')}_${type === 'f' ? 'Front' : 'Back'}.jpg`;
-    await ctx.replyWithDocument({ source: buffer, filename: name });
 });
 
 async function drawBarcode(g, fcn) {
@@ -307,6 +277,6 @@ function drawBackInfo(g, d, isC) {
     g.font='bold 28px "EbrimaBold"'; g.fillText(sn, 1070, 762);
 }
 
-bot.launch().then(() => console.log('Telegram Bot Optimized with Word/Named Export!'));
+bot.launch().then(() => console.log('Telegram Bot Final Optimization V3 Starting...'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
