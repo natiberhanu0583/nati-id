@@ -153,13 +153,16 @@ const fontStack = '"EbrimaBold", "Ebrima", "Arial"';
 const amharicStack = '"EbrimaBold", "Ebrima", "AmharicFont"';
 
 async function renderAndSendSingleID(ctx, id, idx) {
+    console.log(`Starting render for ID #${idx + 1}: ${id.data.english_name || 'Unnamed'}`);
     const pPath = id.data.images && (id.data.images[1] || id.data.images[0]);
     const mPath = id.data.images && id.data.images[0];
     const qPath = id.data.images && (id.data.images[3] || id.data.images[2]);
 
     const urls = [getFullUrl(pPath), getFullUrl(mPath), getFullUrl(qPath)];
-    const fetchPromises = urls.map(u => u ? axios.get(u, { responseType: 'arraybuffer', timeout: 5000 }).then(r => loadImage(Buffer.from(r.data))).catch(() => null) : Promise.resolve(null));
+    console.log(`Fetching images for ID #${idx + 1}...`);
+    const fetchPromises = urls.map(u => u ? axios.get(u, { responseType: 'arraybuffer', timeout: 10000 }).then(r => loadImage(Buffer.from(r.data))).catch(err => { console.error(`Fetch fail: ${u}`, err.message); return null; }) : Promise.resolve(null));
     const [pImg, mImg, qImg] = await Promise.all(fetchPromises);
+    console.log(`Images fetched for ID #${idx + 1}.`);
 
     const render = async (isFront) => {
         const canvas = createCanvas(1280, 800);
@@ -182,54 +185,84 @@ async function renderAndSendSingleID(ctx, id, idx) {
             if (qImg) { g.fillStyle='white'; g.fillRect(576, 40, 666, 650); g.drawImage(qImg, 576, 40, 666, 650); }
             drawBackInfo(g, id.data, id.template.includes('-c'));
         }
-        return canvas.toBuffer('image/jpeg', { quality: 0.85 }); 
+        return canvas.toBuffer('image/jpeg', { quality: 0.80 }); 
     };
 
+    console.log(`Rendering cards for ID #${idx + 1}...`);
     const frontBuf = await render(true);
     const backBuf = await render(false);
-    const safeName = (id.data.english_name || `ID_${idx+1}`).replace(/\s+/g, '_');
+    
+    // Sanitize name more strictly for Telegram
+    const safeName = (id.data.english_name || `ID_${idx+1}`).replace(/[^a-zA-Z0-9]/g, '_');
 
-    await ctx.replyWithDocument({ source: frontBuf, filename: `${safeName}_Front.jpg` });
-    await ctx.replyWithDocument({ source: backBuf, filename: `${safeName}_Back.jpg` });
+    console.log(`Sending cards for ID #${idx + 1}: ${safeName}`);
+    try {
+        await ctx.replyWithDocument({ source: frontBuf, filename: `${safeName}_Front.jpg` });
+    } catch (e) {
+        console.error(`Failed to send Front JPG for ${safeName}:`, e.message);
+        await ctx.reply(`⚠️ Could not send Front JPG for ${safeName}. Sending as Photo instead...`);
+        await ctx.replyWithPhoto({ source: frontBuf }, { caption: `${safeName} Front` });
+    }
+
+    try {
+        await ctx.replyWithDocument({ source: backBuf, filename: `${safeName}_Back.jpg` });
+    } catch (e) {
+        console.error(`Failed to send Back JPG for ${safeName}:`, e.message);
+        await ctx.reply(`⚠️ Could not send Back JPG for ${safeName}. Sending as Photo instead...`);
+        await ctx.replyWithPhoto({ source: backBuf }, { caption: `${safeName} Back` });
+    }
+
+    console.log(`Sent finished for ID #${idx + 1}.`);
     return { frontBuf, backBuf, name: safeName };
 }
 
 bot.action('gen_bulk_jpg', async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
-    const ids = ctx.session.allProcessedData;
-    if (!ids.length) return;
+    const ids = ctx.session.allProcessedData || [];
+    if (!ids.length) return ctx.reply('❌ No IDs found in current session. Please start again.');
     
     await ctx.reply(`🖼 Sending ${ids.length} individual IDs... ⏳`);
     for (let i = 0; i < ids.length; i++) {
-        await ctx.reply(`⏳ Sending: ${ids[i].data.english_name || 'Person ' + (i+1)}`);
-        try { await renderAndSendSingleID(ctx, ids[i], i); } catch (e) {}
+        const name = ids[i].data.english_name || 'Person ' + (i+1);
+        try { 
+            await renderAndSendSingleID(ctx, ids[i], i); 
+        } catch (e) {
+            console.error(`Error sending ID for ${name}:`, e);
+            await ctx.reply(`❌ Failed to send files for: ${name}. ${e.message}`);
+        }
     }
-    ctx.reply('✨ Done!');
+    ctx.reply('✨ All processing attempts finished.');
 });
 
 bot.action('gen_word', async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
-    const ids = ctx.session.allProcessedData;
-    if (!ids.length) return;
+    const ids = ctx.session.allProcessedData || [];
+    if (!ids.length) return ctx.reply('❌ No IDs found.');
     
-    await ctx.reply('📝 Generating Word File... ⏳');
+    await ctx.reply('📝 Generating Printable Word File... ⏳');
     try {
         const sections = [];
         for (let i = 0; i < ids.length; i++) {
-            const r = await renderAndSendSingleID(ctx, ids[i], i).catch(() => null);
-            if (r) {
+            try {
+                const r = await renderAndSendSingleID(ctx, ids[i], i);
                 sections.push({
                     children: [
                         new Paragraph({ children: [new ImageRun({ data: r.frontBuf, transformation: { width: 500, height: 312 } })], alignment: AlignmentType.CENTER }),
                         new Paragraph({ children: [new ImageRun({ data: r.backBuf, transformation: { width: 500, height: 312 } })], alignment: AlignmentType.CENTER })
                     ]
                 });
+            } catch (innerE) {
+                console.error(`Error rendering for Word:`, innerE);
             }
         }
+        if (sections.length === 0) throw new Error("No IDs could be rendered for Word.");
         const doc = new Document({ sections });
         const buffer = await Packer.toBuffer(doc);
         await ctx.replyWithDocument({ source: buffer, filename: `Batch_${Date.now()}.docx` });
-    } catch (e) { ctx.reply('❌ Error.'); }
+    } catch (e) {
+        console.error('Word export error:', e);
+        ctx.reply('❌ Word generation failed: ' + e.message);
+    }
 });
 
 async function drawBarcode(g, fcn) {
