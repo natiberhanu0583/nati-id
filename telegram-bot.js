@@ -26,7 +26,7 @@ const INITIAL_SESSION = {
     step: 0, images: [], allProcessedData: [],
     templateChoice: 'front-template.jpg',
     backTemplateChoice: 'back-template.jpg',
-    filterChoice: 'color'
+    filterChoice: 'color', index: 0
 };
 
 bot.start((ctx) => {
@@ -150,12 +150,14 @@ function getFullUrl(p) {
 }
 
 const fontStack = '"EbrimaBold", "Arial"';
-// Standard ID aspect ratio (CR-80) at high res
 const ID_W = 1280;
 const ID_H = 807;
+const S = (y) => y * (807/800); // Scaling factor for coordinates
 
 async function renderAndSendSingleID(ctx, id, idx) {
     const name = id.data.english_name || 'Unnamed';
+    console.log(`Starting render for ID #${idx + 1}: ${name}`);
+    
     const pPath = id.data.images && (id.data.images[1] || id.data.images[0]);
     const mPath = id.data.images && id.data.images[0];
     const qPath = id.data.images && (id.data.images[3] || id.data.images[2]);
@@ -169,20 +171,20 @@ async function renderAndSendSingleID(ctx, id, idx) {
         const g = canvas.getContext('2d');
         if (isFront) {
             const tpl = await getCachedTemplate(id.template);
-            g.drawImage(tpl, 0, 0, ID_W, ID_H); // Fixed: Force scaling to fit aspect ratio
+            g.drawImage(tpl, 0, 0, ID_W, ID_H);
             if (pImg) {
                 g.save();
                 g.filter = id.filter === 'bw' ? 'grayscale(100%) brightness(110%) contrast(110%)' : 'saturate(45%) brightness(100%) grayscale(74%) sepia(10%)';
-                g.drawImage(pImg, 55, 170, 440, 540); 
+                g.drawImage(pImg, 55, S(170), 440, S(540)); 
                 g.restore();
             }
-            if (mImg) g.drawImage(mImg, 1030, 600, 100, 130);
+            if (mImg) g.drawImage(mImg, 1030, S(600), 100, S(130));
             if (id.data.fcn_id) await drawBarcode(g, id.data.fcn_id);
             drawText(g, id.data, id.isTemplateC);
         } else {
             const bTpl = await getCachedTemplate(id.backTemplate);
-            g.drawImage(bTpl, 0, 0, ID_W, ID_H); // Fixed: Force scaling to fit aspect ratio
-            if (qImg) { g.fillStyle='white'; g.fillRect(576, 40, 666, 650); g.drawImage(qImg, 576, 40, 666, 650); }
+            g.drawImage(bTpl, 0, 0, ID_W, ID_H);
+            if (qImg) { g.fillStyle='white'; g.fillRect(576, S(40), 666, S(650)); g.drawImage(qImg, 576, S(40), 666, S(650)); }
             drawBackInfo(g, id.data, id.isTemplateC);
         }
         return canvas.toBuffer('image/jpeg', { quality: 0.85 }); 
@@ -240,54 +242,66 @@ async function drawBarcode(g, fcn) {
     try {
         const bBuf = await bwipjs.toBuffer({ bcid: 'code128', text: fcn.replace(/\s/g,''), scale: 3, height: 10, backgroundcolor: 'FFFFFF' });
         const bImg = await loadImage(bBuf);
-        g.fillStyle='white'; g.fillRect(570, 620, 400, 120);
+        g.fillStyle='white'; g.fillRect(570, S(620), 400, S(120));
         g.fillStyle='black'; g.font = `bold 24px ${fontStack}`; g.textAlign='center';
-        g.fillText(fcn, 770, 650); g.drawImage(bImg, 595, 660, 350, 60);
+        g.textBaseline = 'top';
+        g.fillText(fcn, 770, S(625)); g.drawImage(bImg, 595, S(660), 350, S(60));
     } catch (e) {}
 }
 
 function drawText(g, d, isC) {
     g.fillStyle = 'black';
+    g.textBaseline = 'top';
     if (isC) {
         g.textAlign = 'center'; const x = 640;
         g.font = `bold 36px ${fontStack}`;
-        if (d.amharic_name) g.fillText(d.amharic_name, x, 275);
-        if (d.english_name) g.fillText(d.english_name, x, 315);
+        if (d.amharic_name) g.fillText(d.amharic_name, x, S(275));
+        if (d.english_name) g.fillText(d.english_name, x, S(315));
         g.font = `bold 34px ${fontStack}`;
-        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, x, 445);
-        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, x, 530);
-        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, x, 615);
-        if (d.fcn_id) { g.font=`bold 32px ${fontStack}`; g.fillText(d.fcn_id, x, 770); }
+        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, x, S(445));
+        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, x, S(530));
+        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, x, S(615));
+        if (d.fcn_id) { g.font=`bold 32px ${fontStack}`; g.fillText(d.fcn_id, x, S(770)); }
     } else {
-        g.textAlign = 'left'; g.font = `bold 36px ${fontStack}`;
-        if (d.amharic_name) g.fillText(d.amharic_name, 510, 245);
-        if (d.english_name) g.fillText(d.english_name, 510, 290);
+        g.textAlign = 'left'; 
         g.font = `bold 34px ${fontStack}`;
-        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 408);
-        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 491);
-        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 574);
-        g.save(); g.translate(36, 560); g.rotate(-Math.PI/2); g.font=`bold 28px ${fontStack}`; g.fillText(d.issue_date_ethiopian||'',0,0); g.restore();
-        g.save(); g.translate(36, 200); g.rotate(-Math.PI/2); g.font=`bold 28px ${fontStack}`; g.fillText(d.issue_date_gregorian||'',0,0); g.restore();
+        if (d.amharic_name) g.fillText(d.amharic_name, 510, S(210));
+        if (d.english_name) g.fillText(d.english_name, 510, S(250));
+        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, S(374));
+        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, S(457));
+        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, S(542));
+        
+        g.font = `bold 28px ${fontStack}`;
+        g.save(); g.translate(26, S(560)); g.rotate(-Math.PI/2); g.fillText(d.issue_date_ethiopian||'',0,0); g.restore();
+        g.save(); g.translate(26, S(200)); g.rotate(-Math.PI/2); g.fillText(d.issue_date_gregorian||'',0,0); g.restore();
     }
 }
 
 function drawBackInfo(g, d, isC) {
-    g.fillStyle = 'black'; g.textAlign = 'left'; g.font = `bold 32px ${fontStack}`;
-    if (d.phone_number) g.fillText(d.phone_number, 45, 130);
-    if (isC) { g.fillText(`${d.amharic_nationality || ''} | ${d.english_nationality || ''}`, 43, 240); }
+    g.fillStyle = 'black'; g.textAlign = 'left'; g.textBaseline = 'top';
+    g.font = `bold 32px ${fontStack}`;
+    if (d.phone_number) g.fillText(d.phone_number, 40, S(93));
+    
+    // Address Section
     g.font = `bold 28px "EbrimaBold", "AmharicFont", "Arial"`;
-    let y = isC ? 335 : 320;
-    if (d.amharic_city) { g.fillText(d.amharic_city, 43, y); y += 35; }
-    if (d.english_city) { g.fillText(d.english_city, 43, y); y += 50; }
-    if (d.amharic_sub_city) { g.fillText(d.amharic_sub_city, 43, y); y += 35; }
-    if (d.english_sub_city) { g.fillText(d.english_sub_city, 43, y); y += 50; }
-    if (d.amharic_woreda) { g.fillText(d.amharic_woreda, 43, y); y += 35; }
+    let y = S(290);
+    if (isC && d.amharic_nationality) { g.fillText(`${d.amharic_nationality} | ${d.english_nationality}`, 43, S(240)); }
+    
+    if (d.amharic_city) { g.fillText(d.amharic_city, 43, y); y += S(35); }
+    if (d.english_city) { g.fillText(d.english_city, 43, y); y += S(45); }
+    if (d.amharic_sub_city) { g.fillText(d.amharic_sub_city, 43, y); y += S(35); }
+    if (d.english_sub_city) { g.fillText(d.english_sub_city, 43, y); y += S(45); }
+    if (d.amharic_woreda) { g.fillText(d.amharic_woreda, 43, y); y += S(35); }
     if (d.english_woreda) { g.fillText(d.english_woreda, 43, y); }
-    if (d.fin_number) { g.font=`bold 30px ${fontStack}`; g.fillText(d.fin_number, 171, 687); }
+
+    g.font = `bold 30px ${fontStack}`;
+    if (d.fin_number) { g.fillText(d.fin_number, 171, S(800 - 113)); }
+    
     const sn = 'S' + Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
-    g.font=`bold 28px ${fontStack}`; g.fillText(sn, 1070, 762);
+    g.font = `bold 28px ${fontStack}`; 
+    g.fillText(sn, 1070, S(800 - 27));
 }
 
-bot.launch().then(() => console.log('Bot Aspect Ratio Fixed!'));
+bot.launch().then(() => console.log('Bot Locations Adjusted to Website Specs!'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
