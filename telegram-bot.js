@@ -317,32 +317,10 @@ async function drawBarcode(g, fcn) {
     } catch (e) {}
 }
 
-function drawTextCSS(g, text, x, y, fontSize, lineHeight) {
-    g.textBaseline = 'top';
-    const halfLeading = (lineHeight - fontSize) / 2;
-    g.fillText(text, x, y + halfLeading);
-}
-
-function drawRotatedCSS(g, text, x, y, fontSize, lineHeight, rotationDeg) {
-    g.save();
-    g.translate(x, y); // HTML origin point
-    // origin-left pivot logic (0%, 50%)
-    const originY = lineHeight / 2;
-    g.translate(0, originY);
-    g.rotate(rotationDeg * Math.PI / 180);
-    g.translate(0, -originY);
-    
-    // Draw relative to new axes with line-height centering
-    g.textBaseline = 'top';
-    const halfLeading = (lineHeight - fontSize) / 2;
-    g.fillText(text, 0, halfLeading);
-    g.restore();
-}
-
 function drawText(g, d, isC) {
     g.fillStyle = 'black';
+    g.textBaseline = 'top';
     if (isC) {
-        g.textBaseline = 'top';
         g.textAlign = 'center'; const x = 640;
         g.font = `bold 36px ${fontStack}`;
         if (d.amharic_name) g.fillText(d.amharic_name, x, 250);
@@ -356,21 +334,19 @@ function drawText(g, d, isC) {
         g.textAlign = 'left'; 
         g.font = `bold 34px ${fontStack}`;
         
-        // Full Names with explicit leading-11 (44px line height)
-        drawTextCSS(g, d.amharic_name||'', 510, 210, 34, 44);
-        drawTextCSS(g, d.english_name||'', 510, 254, 34, 44); 
+        // Exact raw locations from web code
+        if (d.amharic_name) g.fillText(d.amharic_name, 510, 210);
+        if (d.english_name) g.fillText(d.english_name, 510, 254); 
         
-        // Dates with implied default tailwind line-height (1.5 -> 51px)
-        drawTextCSS(g, `${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374, 34, 51);
-        drawTextCSS(g, `${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457, 34, 51);
-        drawTextCSS(g, `${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542, 34, 51);
+        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374);
+        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457);
+        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542);
         
         g.font = `bold 28px ${fontStack}`;
         
-        // Issue Dates with origin-left transform and default line height (28 * 1.5 = 42px)
-        // User requested moved left small (26 -> 20)
-        drawRotatedCSS(g, d.issue_date_ethiopian||'', 20, 560, 28, 42, -90);
-        drawRotatedCSS(g, d.issue_date_gregorian||'', 20, 200, 28, 42, -90);
+        // Issue Dates (using user adjusted left: 20px)
+        g.save(); g.translate(20, 560); g.rotate(-Math.PI/2); g.fillText(d.issue_date_ethiopian||'', 0, 0); g.restore();
+        g.save(); g.translate(20, 200); g.rotate(-Math.PI/2); g.fillText(d.issue_date_gregorian||'', 0, 0); g.restore();
     }
 }
 
