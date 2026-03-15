@@ -201,14 +201,12 @@ async function renderAndSendSingleID(ctx, id, idx) {
             g.drawImage(tpl, 0, 0, ID_W, ID_H);
             if (pImg) {
                 g.save();
-                g.filter = id.filter === 'bw' ? 'brightness(122%) sepia(20%) saturate(41%) grayscale(20%)' : 'saturate(45%) brightness(100%) grayscale(74%) sepia(10%)';
-                
+                g.filter = id.filter === 'bw' ? 'hue-rotate(0deg) saturate(41%) brightness(122%) contrast(100%) grayscale(20%) sepia(20%)' : 'saturate(45%) brightness(100%) grayscale(74%) sepia(10%)';
                 // CSS object-fit: contain simulation
                 const cw = 440; const ch = 540;
                 const imgAspect = pImg.width / pImg.height;
                 const canvasAspect = cw / ch;
                 let drawW, drawH, drawX, drawY;
-                
                 if (imgAspect > canvasAspect) {
                     drawW = cw; drawH = cw / imgAspect;
                     drawX = 55; drawY = 170 + (ch - drawH) / 2;
@@ -317,11 +315,30 @@ async function drawBarcode(g, fcn) {
     } catch (e) {}
 }
 
+function drawTextCSS(g, text, x, y, fontSize, lineHeight) {
+    g.textBaseline = 'top';
+    const halfLeading = (lineHeight - fontSize) / 2;
+    g.fillText(text, x, y + halfLeading);
+}
+
+function drawRotatedCSS(g, text, x, y, fontSize, lineHeight, rotationDeg) {
+    g.save();
+    g.translate(x, y); // HTML origin point
+    const originY = lineHeight / 2;
+    g.translate(0, originY);
+    g.rotate(rotationDeg * Math.PI / 180);
+    g.translate(0, -originY);
+    
+    g.textBaseline = 'top';
+    const halfLeading = (lineHeight - fontSize) / 2;
+    g.fillText(text, 0, halfLeading);
+    g.restore();
+}
+
 function drawText(g, d, isC) {
     g.fillStyle = 'black';
-    g.textBaseline = 'top';
-    const o = 5;
     if (isC) {
+        g.textBaseline = 'top';
         g.textAlign = 'center'; const x = 640;
         g.font = `bold 36px ${fontStack}`;
         if (d.amharic_name) g.fillText(d.amharic_name, x, 250);
@@ -334,14 +351,21 @@ function drawText(g, d, isC) {
     } else {
         g.textAlign = 'left'; 
         g.font = `bold 34px ${fontStack}`;
-        if (d.amharic_name) g.fillText(d.amharic_name, 510, 210 + o);
-        if (d.english_name) g.fillText(d.english_name, 510, 210 + 44 + o);
-        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374 + o);
-        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457 + o);
-        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542 + o);
+        
+        // Full Names with explicit leading-11 (44px line height)
+        drawTextCSS(g, d.amharic_name||'', 510, 210, 34, 44);
+        drawTextCSS(g, d.english_name||'', 510, 254, 34, 44); 
+        
+        // Dates with implied default tailwind line-height (1.5 -> 51px)
+        drawTextCSS(g, `${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374, 34, 51);
+        drawTextCSS(g, `${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457, 34, 51);
+        drawTextCSS(g, `${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542, 34, 51);
+        
         g.font = `bold 28px ${fontStack}`;
-        g.save(); g.translate(20, 560); g.rotate(-Math.PI/2); g.fillText(d.issue_date_ethiopian||'',0,0); g.restore();
-        g.save(); g.translate(20, 200); g.rotate(-Math.PI/2); g.fillText(d.issue_date_gregorian||'',0,0); g.restore();
+        
+        // Issue Dates (User preferred left: 20x)
+        drawRotatedCSS(g, d.issue_date_ethiopian||'', 20, 560, 28, 42, -90);
+        drawRotatedCSS(g, d.issue_date_gregorian||'', 20, 200, 28, 42, -90);
     }
 }
 
