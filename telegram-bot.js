@@ -150,9 +150,8 @@ function getFullUrl(p) {
 }
 
 const fontStack = '"EbrimaBold", "Arial"';
-// MATCH WEB DIMENSIONS EXACTLY
 const ID_W = 1280;
-const ID_H = 800;
+const ID_H = 800; // Exact web height
 
 async function renderAndSendSingleID(ctx, id, idx) {
     const name = id.data.english_name || 'Unnamed';
@@ -182,10 +181,14 @@ async function renderAndSendSingleID(ctx, id, idx) {
         } else {
             const bTpl = await getCachedTemplate(id.backTemplate);
             g.drawImage(bTpl, 0, 0, ID_W, ID_H);
-            if (qImg) { g.fillStyle='white'; g.fillRect(576, 40, 666, 650); g.drawImage(qImg, 576, 40, 666, 650); }
+            if (qImg) {
+                g.fillStyle = 'white';
+                g.fillRect(576, 40, 666, 650);
+                g.drawImage(qImg, 576, 40, 666, 650);
+            }
             drawBackInfo(g, id.data, id.isTemplateC);
         }
-        return canvas.toBuffer('image/jpeg', { quality: 0.90 }); 
+        return canvas.toBuffer('image/jpeg', { quality: 0.92 }); 
     };
 
     const frontBuf = await render(true);
@@ -204,10 +207,10 @@ async function renderAndSendSingleID(ctx, id, idx) {
 bot.action('gen_bulk_jpg', async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
     const ids = ctx.session.allProcessedData || [];
-    if (!ids.length) return ctx.reply('❌ No IDs.');
-    await ctx.reply(`🖼 Sending ${ids.length} individual IDs...`);
+    if (!ids.length) return ctx.reply('❌ No IDs found.');
+    await ctx.reply(`🖼 Processing ${ids.length} individual IDs...`);
     for (let i = 0; i < ids.length; i++) {
-        try { await renderAndSendSingleID(ctx, ids[i], i); } catch (e) {}
+        try { await renderAndSendSingleID(ctx, ids[i], i); } catch (e) { console.error(e); }
     }
     ctx.reply('✨ Done!');
 });
@@ -223,8 +226,8 @@ bot.action('gen_word', async (ctx) => {
             if (r) {
                 sections.push({
                     children: [
-                        new Paragraph({ children: [new ImageRun({ data: r.frontBuf, transformation: { width: 500, height: 312 } })], alignment: AlignmentType.CENTER }),
-                        new Paragraph({ children: [new ImageRun({ data: r.backBuf, transformation: { width: 500, height: 312 } })], alignment: AlignmentType.CENTER })
+                        new Paragraph({ children: [new ImageRun({ data: r.frontBuf, transformation: { width: 450, height: 281 } })], alignment: AlignmentType.CENTER }),
+                        new Paragraph({ children: [new ImageRun({ data: r.backBuf, transformation: { width: 450, height: 281 } })], alignment: AlignmentType.CENTER })
                     ]
                 });
             }
@@ -239,10 +242,12 @@ async function drawBarcode(g, fcn) {
     try {
         const bBuf = await bwipjs.toBuffer({ bcid: 'code128', text: fcn.replace(/\s/g,''), scale: 3, height: 10, backgroundcolor: 'FFFFFF' });
         const bImg = await loadImage(bBuf);
+        // Container exactly as web: top 620, left 570
         g.fillStyle='white'; g.fillRect(570, 620, 400, 120);
         g.fillStyle='black'; g.font = `bold 24px ${fontStack}`; g.textAlign='center';
         g.textBaseline = 'top';
-        g.fillText(fcn, 770, 625); g.drawImage(bImg, 595, 660, 350, 60);
+        g.fillText(fcn, 770, 625);
+        g.drawImage(bImg, 595, 660, 350, 60);
     } catch (e) {}
 }
 
@@ -252,26 +257,33 @@ function drawText(g, d, isC) {
     if (isC) {
         g.textAlign = 'center'; const x = 640;
         g.font = `bold 36px ${fontStack}`;
-        if (d.amharic_name) g.fillText(d.amharic_name, x, 275);
-        if (d.english_name) g.fillText(d.english_name, x, 315);
+        if (d.amharic_name) g.fillText(d.amharic_name, x, 250);
+        if (d.english_name) g.fillText(d.english_name, x, 295);
         g.font = `bold 34px ${fontStack}`;
-        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, x, 445);
-        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, x, 530);
-        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, x, 615);
-        if (d.fcn_id) { g.font=`bold 32px ${fontStack}`; g.fillText(d.fcn_id, x, 770); }
+        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, x, 420);
+        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, x, 505);
+        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, x, 590);
+        if (d.fcn_id) { g.font=`bold 32px ${fontStack}`; g.fillText(d.fcn_id, x, 750); }
     } else {
         g.textAlign = 'left'; 
+        // ABSOLUTE FORMAT MIRRORING WEB (1280x800)
         g.font = `bold 34px ${fontStack}`;
-        // MATCH WEB ABSOLUTE LOCATIONS EXACTLY
-        if (d.amharic_name) g.fillText(d.amharic_name, 510, 210);
-        if (d.english_name) g.fillText(d.english_name, 510, 255); // Adjusted gap
         
+        // Full Name at 210, 510
+        if (d.amharic_name) g.fillText(d.amharic_name, 510, 210);
+        if (d.english_name) g.fillText(d.english_name, 510, 254); // +44px leading
+        
+        // DOB at 374, 512
         g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374);
+        
+        // Sex at 457, 512
         g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457);
+        
+        // Expiry at 542, 512
         g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542);
         
+        // Issue Dates (Side Rails)
         g.font = `bold 28px ${fontStack}`;
-        // ISSUE DATES SIDE RAILS
         g.save(); g.translate(26, 560); g.rotate(-Math.PI/2); g.fillText(d.issue_date_ethiopian||'',0,0); g.restore();
         g.save(); g.translate(26, 200); g.rotate(-Math.PI/2); g.fillText(d.issue_date_gregorian||'',0,0); g.restore();
     }
@@ -279,29 +291,41 @@ function drawText(g, d, isC) {
 
 function drawBackInfo(g, d, isC) {
     g.fillStyle = 'black'; g.textAlign = 'left'; g.textBaseline = 'top';
-    g.font = `bold 32px ${fontStack}`;
-    if (d.phone_number) g.fillText(d.phone_number, 40, 93); // Exact web: top 93, left 40
     
-    // Exact web address section: left 43, top 290
+    // Web: top 93, left 40
+    g.font = `bold 32px ${fontStack}`;
+    if (d.phone_number) g.fillText(d.phone_number, 40, 93);
+    
+    // Web Address: left 43, top 290
     g.font = `bold 32px "EbrimaBold", "AmharicFont", "Arial"`;
     let y = 290;
-    if (isC && d.amharic_nationality) { g.fillText(`${d.amharic_nationality} | ${d.english_nationality}`, 43, 220); }
     
-    if (d.amharic_city) { g.fillText(d.amharic_city, 43, y); y += 40; } // Simulating marginBottom -10 + 20 gap
-    if (d.english_city) { g.fillText(d.english_city, 43, y); y += 55; }
-    if (d.amharic_sub_city) { g.fillText(d.amharic_sub_city, 43, y); y += 40; }
-    if (d.english_sub_city) { g.fillText(d.english_sub_city, 43, y); y += 55; }
-    if (d.amharic_woreda) { g.fillText(d.amharic_woreda, 43, y); y += 40; }
-    if (d.english_woreda) { g.fillText(d.english_woreda, 43, y); }
+    const fields = [
+        [d.amharic_city, 30],
+        [d.english_city, 45],
+        [d.amharic_sub_city, 30],
+        [d.english_sub_city, 45],
+        [d.amharic_woreda, 30],
+        [d.english_woreda, 0]
+    ];
+    
+    fields.forEach(([txt, gap]) => {
+        if (txt) {
+            g.fillText(txt, 43, y);
+            y += gap;
+        }
+    });
 
+    // FIN: bottom 113 (top 687)
     g.font = `bold 30px ${fontStack}`;
-    if (d.fin_number) { g.fillText(d.fin_number, 171, 687); } // 800-113=687
+    if (d.fin_number) { g.fillText(d.fin_number, 171, 687); }
     
-    const sn = 'S' + Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
+    // Serial: bottom 27 (top 773)
+    const sn = 'S' + Math.floor(100000000 + Math.random() * 900000000).toString();
     g.font = `bold 28px ${fontStack}`; 
-    g.fillText(sn, 1070, 773); // 800-27=773
+    g.fillText(sn, 1070, 773);
 }
 
-bot.launch().then(() => console.log('Bot Web Alignment Finalized!'));
+bot.launch().then(() => console.log('Bot Final Absolute Match V4 Ready!'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
