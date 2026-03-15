@@ -279,8 +279,9 @@ function drawText(g, d, isC) {
         g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457 + o);
         g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542 + o);
         g.font = `bold 28px ${fontStack}`;
-        g.save(); g.translate(26, 560); g.rotate(-Math.PI/2); g.fillText(d.issue_date_ethiopian||'',0,0); g.restore();
-        g.save(); g.translate(26, 200); g.rotate(-Math.PI/2); g.fillText(d.issue_date_gregorian||'',0,0); g.restore();
+        // Move to left small (Was 26, now 20)
+        g.save(); g.translate(20, 560); g.rotate(-Math.PI/2); g.fillText(d.issue_date_ethiopian||'',0,0); g.restore();
+        g.save(); g.translate(20, 200); g.rotate(-Math.PI/2); g.fillText(d.issue_date_gregorian||'',0,0); g.restore();
     }
 }
 
@@ -299,15 +300,16 @@ function drawBackInfo(g, d, isC) {
     if (d.english_woreda) { g.fillText(d.english_woreda, 43, y); }
 
     g.textBaseline = 'bottom';
-    // User requested: small down at fin (further from top), move up small at sn (closer to top)
+    // User requested: move down so so small fin (Was 105, now 102)
     g.font = `bold 30px ${fontStack}`;
-    if (d.fin_number) { g.fillText(d.fin_number, 171, 800 - 105); } // Was 113, now 105 (Small down)
+    if (d.fin_number) { g.fillText(d.fin_number, 171, 800 - 102); } 
     
+    // SN location is considered perfect now
     const sn = 'S' + Math.floor(100000000 + Math.random() * 900000000).toString();
     g.font = `bold 28px ${fontStack}`; 
-    g.fillText(sn, 1070, 800 - 35); // Was 27, now 35 (Move up small)
+    g.fillText(sn, 1070, 800 - 35);
 }
 
-bot.launch().then(() => console.log('Bot Final Micro-Adjustments Applied!'));
+bot.launch().then(() => console.log('Bot Micro-Adjustments V6 Ready!'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
