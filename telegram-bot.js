@@ -202,7 +202,6 @@ async function renderAndSendSingleID(ctx, id, idx) {
             if (pImg) {
                 g.save();
                 g.filter = id.filter === 'bw' ? 'grayscale(100%) brightness(110%) contrast(110%)' : 'saturate(45%) brightness(100%) grayscale(74%) sepia(10%)';
-                // Move profile picture EXACTLY matching web (55px left, 200px top -> wait web is actually top: 170px for profile!)
                 g.drawImage(pImg, 55, 170, 440, 540); 
                 g.restore();
             }
@@ -273,25 +272,26 @@ async function drawBarcode(g, fcn) {
     try {
         const bBuf = await bwipjs.toBuffer({ bcid: 'code128', text: fcn.replace(/\s/g,''), scale: 3, height: 10, backgroundcolor: 'FFFFFF' });
         const bImg = await loadImage(bBuf);
-        // Barcode block: left 570, top 620
-        g.fillStyle='white'; g.fillRect(570, 620, 400, 120);
+        // Barcode block tightly matching web's dynamic sizing instead of huge fixed block
+        g.fillStyle='white'; 
+        // 570 left, 620 top to match web
+        g.fillRect(570, 620, 310, 110);
         g.fillStyle='black'; g.font = `bold 24px "Arial", sans-serif`; g.textAlign='center';
         g.textBaseline = 'top';
         const spacing = 5;
         const text = fcn;
-        let x = 770 - (g.measureText(text).width + (text.length-1)*spacing)/2;
+        let x = 725 - (g.measureText(text).width + (text.length-1)*spacing)/2;
         for(let i=0; i<text.length; i++) {
             g.fillText(text[i], x, 630);
             x += g.measureText(text[i]).width + spacing;
         }
-        g.drawImage(bImg, 595, 660, 350, 60);
+        g.drawImage(bImg, 582, 665, 286, 50);
     } catch (e) {}
 }
 
 function drawText(g, d, isC) {
     g.fillStyle = 'black';
     g.textBaseline = 'top';
-    const o = 5;
     if (isC) {
         g.textAlign = 'center'; const x = 640;
         g.font = `bold 36px ${fontStack}`;
@@ -305,16 +305,18 @@ function drawText(g, d, isC) {
     } else {
         g.textAlign = 'left'; 
         g.font = `bold 34px ${fontStack}`;
-        // FULL NAME at 510, 210 exactly matching web
-        if (d.amharic_name) g.fillText(d.amharic_name, 510, 210 + o);
-        if (d.english_name) g.fillText(d.english_name, 510, 210 + 44 + o); // leading-11 = 44px
         
-        // DATES exactly matching web
-        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374 + o);
-        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457 + o);
-        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542 + o);
+        // Removed custom artificial +5 offsets to STRICTLY adehre to web coordinates
+        if (d.amharic_name) g.fillText(d.amharic_name, 510, 210);
+        if (d.english_name) g.fillText(d.english_name, 510, 254); // 210 + exactly 44px leading from tailwind
+        
+        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374);
+        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457);
+        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542);
         
         g.font = `bold 28px ${fontStack}`;
+        
+        // Exact 26px left anchor matching style={{left: '26px'}}
         g.save(); g.translate(26, 560); g.rotate(-Math.PI/2); g.fillText(d.issue_date_ethiopian||'',0,0); g.restore();
         g.save(); g.translate(26, 200); g.rotate(-Math.PI/2); g.fillText(d.issue_date_gregorian||'',0,0); g.restore();
     }
@@ -342,6 +344,6 @@ function drawBackInfo(g, d, isC) {
     g.fillText(sn, 1070, 800 - 35);
 }
 
-bot.launch().then(() => console.log('Bot Align Front Ready!'));
+bot.launch().then(() => console.log('Bot Front Absolute Format Fixed!'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
