@@ -291,7 +291,7 @@ async function renderTemplates(ctx, data) {
         }
 
         g.fillStyle = 'black';
-        g.font = 'bold 32px "Ebrima", "Arial"';
+        g.font = 'bold 32px "EbrimaBold", "Ebrima", "Arial"';
         if (data.phone_number) g.fillText(data.phone_number, 45, 130);
 
         // Nationality (Template C only)
@@ -301,7 +301,7 @@ async function renderTemplates(ctx, data) {
         }
 
         // Address Section (Stacked Amharic & English to match Web)
-        g.font = 'bold 28px "Ebrima", "Arial"';
+        g.font = 'bold 28px "EbrimaBold", "Ebrima", "Arial"';
         let currentY = templateFile === 'front-template-c.jpg' ? 335 : 320;
         if (data.amharic_city) { g.fillText(data.amharic_city, 43, currentY); currentY += 35; }
         if (data.english_city) { g.fillText(data.english_city, 43, currentY); currentY += 50; }
@@ -311,12 +311,12 @@ async function renderTemplates(ctx, data) {
         if (data.english_woreda) { g.fillText(data.english_woreda, 43, currentY); }
 
         if (data.fin_number) {
-            g.font = 'bold 30px "Ebrima", "Arial"';
+            g.font = 'bold 30px "EbrimaBold", "Ebrima", "Arial"';
             g.fillText(data.fin_number, 171, 687);
         }
 
         const serialNumber = 'S' + Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
-        g.font = 'bold 28px "Ebrima", "Arial"';
+        g.font = 'bold 28px "EbrimaBold", "Ebrima", "Arial"';
         g.fillText(serialNumber, 1070, 762);
 
         const backBuffer = canvas.toBuffer('image/jpeg', { quality: 0.9 });
