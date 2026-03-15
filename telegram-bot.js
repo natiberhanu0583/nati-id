@@ -9,11 +9,21 @@ const { createCanvas, loadImage, registerFont } = require('canvas');
 
 // Register fonts for Amharic support
 try {
+    const ebrimaPath = 'C:\\Windows\\Fonts\\ebrima.ttf';
+    const ebrimaBoldPath = 'C:\\Windows\\Fonts\\ebrimabd.ttf';
+    
+    if (fs.existsSync(ebrimaPath)) {
+        registerFont(ebrimaPath, { family: 'Ebrima' });
+        console.log('Ebrima font registered');
+    }
+    if (fs.existsSync(ebrimaBoldPath)) {
+        registerFont(ebrimaBoldPath, { family: 'EbrimaBold' });
+        console.log('Ebrima Bold font registered');
+    }
+
+    // Keep Nokia fonts as backup
     const fontPath = path.join(__dirname, 'public', 'NOKIA ኖኪያ ቀላል.TTF');
-    const headlinePath = path.join(__dirname, 'public', 'NOKIAPUREHEADLINE.TTF');
     if (fs.existsSync(fontPath)) registerFont(fontPath, { family: 'AmharicFont' });
-    if (fs.existsSync(headlinePath)) registerFont(headlinePath, { family: 'AmharicHeadline' });
-    console.log('Fonts registered successfully');
 } catch (e) {
     console.error('Font registration failed:', e.message);
 }
@@ -191,13 +201,12 @@ async function renderTemplates(ctx, data) {
         g.fillStyle = 'black';
         
         // Name
-        g.font = 'bold 36px "AmharicHeadline"';
+        g.font = 'bold 36px "EbrimaBold", "Ebrima", "Arial"';
         if (data.amharic_name) g.fillText(data.amharic_name, 510, 245);
-        g.font = 'bold 36px "Arial"';
         if (data.english_name) g.fillText(data.english_name, 510, 290);
 
         // Dates
-        g.font = 'bold 34px "Arial"';
+        g.font = 'bold 34px "EbrimaBold", "Ebrima", "Arial"';
         const dob = `${data.birth_date_ethiopian || ''} | ${data.birth_date_gregorian || ''}`;
         g.fillText(dob, 512, 408);
 
@@ -211,14 +220,14 @@ async function renderTemplates(ctx, data) {
         g.save();
         g.translate(26, 560);
         g.rotate(-Math.PI / 2);
-        g.font = 'bold 28px "Arial"';
+        g.font = 'bold 28px "EbrimaBold", "Ebrima", "Arial"';
         g.fillText(data.issue_date_ethiopian || '', 0, 0);
         g.restore();
 
         g.save();
         g.translate(26, 200);
         g.rotate(-Math.PI / 2);
-        g.font = 'bold 28px "Arial"';
+        g.font = 'bold 28px "EbrimaBold", "Ebrima", "Arial"';
         g.fillText(data.issue_date_gregorian || '', 0, 0);
         g.restore();
 
@@ -231,14 +240,11 @@ async function renderTemplates(ctx, data) {
         const backTpl = await loadImage(path.join(__dirname, 'public', 'back-template.jpg'));
         g.drawImage(backTpl, 0, 0, 1280, 800);
 
-        // QR Code on the Back (Moved from Front)
+        // QR Code on the Back
         const qrPath = data.images && (data.images[3] || data.images[2]);
         if (qrPath) {
             try {
                 const qrImg = await loadImage(getFullUrl(qrPath));
-                // Absolute position from web version: top 40px, right 38px
-                // Width 666px, Height 650px
-                // Right is 1280 - 38 - 666 = 576
                 g.fillStyle = 'white';
                 g.fillRect(576, 40, 666, 650);
                 g.drawImage(qrImg, 576, 40, 666, 650);
@@ -248,30 +254,28 @@ async function renderTemplates(ctx, data) {
         }
 
         g.fillStyle = 'black';
-        g.font = 'bold 32px "Arial"';
+        g.font = 'bold 32px "EbrimaBold", "Ebrima", "Arial"';
         g.textAlign = 'left';
         
         // Phone
         if (data.phone_number) g.fillText(data.phone_number, 45, 130);
 
         // Address Section
-        g.font = 'bold 28px "AmharicFont"';
+        g.font = 'bold 28px "EbrimaBold", "Ebrima", "AmharicFont"';
         if (data.amharic_city) g.fillText(`ከተማ: ${data.amharic_city}`, 43, 330);
         if (data.amharic_sub_city) g.fillText(`ክፍለ ከተማ: ${data.amharic_sub_city}`, 43, 370);
         if (data.amharic_woreda) g.fillText(`ወረዳ: ${data.amharic_woreda}`, 43, 410);
 
-        // FIN Number (from web CSS: bottom 113px, left 171px)
-        // bottom 113px = 800 - 113 = 687
+        // FIN Number
         if (data.fin_number) {
-            g.font = 'bold 30px "Arial"';
+            g.font = 'bold 30px "EbrimaBold", "Ebrima", "Arial"';
             g.textAlign = 'left';
             g.fillText(data.fin_number, 171, 687);
         }
 
-        // Serial Number (from web CSS: left 1070px, bottom 27px)
-        // bottom 27px = 800 - 27 = 773
+        // Serial Number
         const serialNumber = 'S' + Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
-        g.font = 'bold 28px "Arial"';
+        g.font = 'bold 28px "EbrimaBold", "Ebrima", "Arial"';
         g.textAlign = 'left';
         g.fillText(serialNumber, 1070, 773);
 
