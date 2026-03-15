@@ -99,7 +99,8 @@ async function processId(ctx) {
             await ctx.reply('✅ Data Extracted! Now choose your Template:', 
                 Markup.inlineKeyboard([
                     [Markup.button.callback('Template A (Standard)', 'tpl_a')],
-                    [Markup.button.callback('Template B (Alternative)', 'tpl_b')]
+                    [Markup.button.callback('Template B (Alternative)', 'tpl_b')],
+                    [Markup.button.callback('Template C (Modern)', 'tpl_c')]
                 ])
             );
         } else {
@@ -112,8 +113,18 @@ async function processId(ctx) {
 }
 
 // Template Choice Handler
-bot.action(['tpl_a', 'tpl_b'], async (ctx) => {
-    ctx.session.templateChoice = ctx.match === 'tpl_a' ? 'front-template.jpg' : 'front-templateb.jpg';
+bot.action(['tpl_a', 'tpl_b', 'tpl_c'], async (ctx) => {
+    if (ctx.match === 'tpl_a') {
+        ctx.session.templateChoice = 'front-template.jpg';
+        ctx.session.backTemplateChoice = 'back-template.jpg';
+    } else if (ctx.match === 'tpl_b') {
+        ctx.session.templateChoice = 'front-templateb.jpg';
+        ctx.session.backTemplateChoice = 'back-template.jpg';
+    } else if (ctx.match === 'tpl_c') {
+        ctx.session.templateChoice = 'front-template-c.jpg';
+        ctx.session.backTemplateChoice = 'back-template-c.jpg';
+    }
+    
     await ctx.answerCbQuery();
     await ctx.editMessageText('Template selected! Now choose Photo Style:', 
         Markup.inlineKeyboard([
@@ -207,37 +218,66 @@ async function renderTemplates(ctx, data) {
         }
 
         // Text Rendering
-        g.textAlign = 'left';
+        const isTemplateC = templateFile === 'front-template-c.jpg';
         g.fillStyle = 'black';
-        g.font = 'bold 36px "EbrimaBold", "Ebrima", "Arial"';
-        if (data.amharic_name) g.fillText(data.amharic_name, 510, 245);
-        if (data.english_name) g.fillText(data.english_name, 510, 290);
+        
+        if (isTemplateC) {
+            g.textAlign = 'center';
+            const centerX = 640;
+            
+            g.font = 'bold 36px "EbrimaBold", "Ebrima", "Arial"';
+            if (data.amharic_name) g.fillText(data.amharic_name, centerX, 275);
+            if (data.english_name) g.fillText(data.english_name, centerX, 315);
 
-        g.font = 'bold 34px "EbrimaBold", "Ebrima", "Arial"';
-        g.fillText(`${data.birth_date_ethiopian || ''} | ${data.birth_date_gregorian || ''}`, 512, 408);
-        g.fillText(`${data.amharic_gender || ''} | ${data.english_gender || ''}`, 512, 491);
-        g.fillText(`${data.expiry_date_ethiopian || ''} | ${data.expiry_date_gregorian || ''}`, 512, 574);
+            g.font = 'bold 34px "EbrimaBold", "Ebrima", "Arial"';
+            const dob = `${data.birth_date_ethiopian || ''} | ${data.birth_date_gregorian || ''}`;
+            g.fillText(dob, centerX, 445);
 
-        // Sides
-        g.save();
-        g.translate(36, 560);
-        g.rotate(-Math.PI / 2);
-        g.font = 'bold 28px "EbrimaBold", "Ebrima", "Arial"';
-        g.fillText(data.issue_date_ethiopian || '', 0, 0);
-        g.restore();
-        g.save();
-        g.translate(36, 200);
-        g.rotate(-Math.PI / 2);
-        g.font = 'bold 28px "EbrimaBold", "Ebrima", "Arial"';
-        g.fillText(data.issue_date_gregorian || '', 0, 0);
-        g.restore();
+            const gender = `${data.amharic_gender || ''} | ${data.english_gender || ''}`;
+            g.fillText(gender, centerX, 530);
+
+            const expiry = `${data.expiry_date_ethiopian || ''} | ${data.expiry_date_gregorian || ''}`;
+            g.fillText(expiry, centerX, 615);
+
+            if (data.fcn_id) {
+                g.font = 'bold 32px "EbrimaBold", "Arial"';
+                g.fillText(data.fcn_id, centerX, 770);
+            }
+        } else {
+            g.textAlign = 'left';
+            g.font = 'bold 36px "EbrimaBold", "Ebrima", "Arial"';
+            if (data.amharic_name) g.fillText(data.amharic_name, 510, 245);
+            if (data.english_name) g.fillText(data.english_name, 510, 290);
+
+            g.font = 'bold 34px "EbrimaBold", "Ebrima", "Arial"';
+            g.fillText(`${data.birth_date_ethiopian || ''} | ${data.birth_date_gregorian || ''}`, 512, 408);
+            g.fillText(`${data.amharic_gender || ''} | ${data.english_gender || ''}`, 512, 491);
+            g.fillText(`${data.expiry_date_ethiopian || ''} | ${data.expiry_date_gregorian || ''}`, 512, 574);
+        }
+
+        // Sides (Only for Template A/B)
+        if (!isTemplateC) {
+            g.save();
+            g.translate(36, 560);
+            g.rotate(-Math.PI / 2);
+            g.font = 'bold 28px "EbrimaBold", "Ebrima", "Arial"';
+            g.fillText(data.issue_date_ethiopian || '', 0, 0);
+            g.restore();
+            g.save();
+            g.translate(36, 200);
+            g.rotate(-Math.PI / 2);
+            g.font = 'bold 28px "EbrimaBold", "Ebrima", "Arial"';
+            g.fillText(data.issue_date_gregorian || '', 0, 0);
+            g.restore();
+        }
 
         const frontBuffer = canvas.toBuffer('image/jpeg', { quality: 0.9 });
         await ctx.replyWithPhoto({ source: frontBuffer }, { caption: '🆔 ID Front Card' });
 
         // --- RENDER BACK ---
         g.clearRect(0, 0, 1280, 800);
-        const backTpl = await loadImage(path.join(__dirname, 'public', 'back-template.jpg'));
+        const backTemplateFile = ctx.session.backTemplateChoice || 'back-template.jpg';
+        const backTpl = await loadImage(path.join(__dirname, 'public', backTemplateFile));
         g.drawImage(backTpl, 0, 0, 1280, 800);
 
         const qrPath = data.images && (data.images[3] || data.images[2]);
@@ -254,8 +294,15 @@ async function renderTemplates(ctx, data) {
         g.font = 'bold 32px "Ebrima", "Arial"';
         if (data.phone_number) g.fillText(data.phone_number, 45, 130);
 
+        // Nationality (Template C only)
+        if (templateFile === 'front-template-c.jpg') {
+            const nationality = `${data.amharic_nationality || ''} | ${data.english_nationality || ''}`;
+            g.fillText(nationality, 43, 240);
+        }
+
+        // Address Section (Stacked Amharic & English to match Web)
         g.font = 'bold 28px "Ebrima", "Arial"';
-        let currentY = 320;
+        let currentY = templateFile === 'front-template-c.jpg' ? 335 : 320;
         if (data.amharic_city) { g.fillText(data.amharic_city, 43, currentY); currentY += 35; }
         if (data.english_city) { g.fillText(data.english_city, 43, currentY); currentY += 50; }
         if (data.amharic_sub_city) { g.fillText(data.amharic_sub_city, 43, currentY); currentY += 35; }
