@@ -151,7 +151,7 @@ function getFullUrl(p) {
 
 const fontStack = '"EbrimaBold", "AmharicFont", "Arial"';
 const ID_W = 1280;
-const ID_H = 800; // Exact web height
+const ID_H = 800;
 
 async function renderAndSendSingleID(ctx, id, idx) {
     const name = id.data.english_name || 'Unnamed';
@@ -245,16 +245,13 @@ async function drawBarcode(g, fcn) {
         g.fillStyle='white'; g.fillRect(570, 620, 400, 120);
         g.fillStyle='black'; g.font = `bold 24px ${fontStack}`; g.textAlign='center';
         g.textBaseline = 'top';
-        
-        // Simulating letter-spacing 5px
         const spacing = 5;
         const text = fcn;
         let x = 770 - (g.measureText(text).width + (text.length-1)*spacing)/2;
         for(let i=0; i<text.length; i++) {
-            g.fillText(text[i], x, 630); // 620+10 padding
+            g.fillText(text[i], x, 630);
             x += g.measureText(text[i]).width + spacing;
         }
-        
         g.drawImage(bImg, 595, 660, 350, 60);
     } catch (e) {}
 }
@@ -262,8 +259,7 @@ async function drawBarcode(g, fcn) {
 function drawText(g, d, isC) {
     g.fillStyle = 'black';
     g.textBaseline = 'top';
-    const o = 5; // Vertical offset to center within 44px leading (44-34)/2 = 5
-    
+    const o = 5;
     if (isC) {
         g.textAlign = 'center'; const x = 640;
         g.font = `bold 36px ${fontStack}`;
@@ -277,14 +273,11 @@ function drawText(g, d, isC) {
     } else {
         g.textAlign = 'left'; 
         g.font = `bold 34px ${fontStack}`;
-        
         if (d.amharic_name) g.fillText(d.amharic_name, 510, 210 + o);
-        if (d.english_name) g.fillText(d.english_name, 510, 210 + 44 + o); // leading-11 (44px)
-        
+        if (d.english_name) g.fillText(d.english_name, 510, 210 + 44 + o);
         g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374 + o);
         g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457 + o);
         g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542 + o);
-        
         g.font = `bold 28px ${fontStack}`;
         g.save(); g.translate(26, 560); g.rotate(-Math.PI/2); g.fillText(d.issue_date_ethiopian||'',0,0); g.restore();
         g.save(); g.translate(26, 200); g.rotate(-Math.PI/2); g.fillText(d.issue_date_gregorian||'',0,0); g.restore();
@@ -295,12 +288,9 @@ function drawBackInfo(g, d, isC) {
     g.fillStyle = 'black'; g.textAlign = 'left'; g.textBaseline = 'top';
     g.font = `bold 32px ${fontStack}`;
     if (d.phone_number) g.fillText(d.phone_number, 40, 93);
-    
     g.font = `bold 32px ${fontStack}`;
     let y = 290;
     if (isC && d.amharic_nationality) { g.fillText(`${d.amharic_nationality} | ${d.english_nationality}`, 43, 220); }
-    
-    // Adjusted increments to honor web margin behavior
     if (d.amharic_city) { g.fillText(d.amharic_city, 43, y); y += 28; } 
     if (d.english_city) { g.fillText(d.english_city, 43, y); y += 52; }
     if (d.amharic_sub_city) { g.fillText(d.amharic_sub_city, 43, y); y += 28; }
@@ -308,16 +298,16 @@ function drawBackInfo(g, d, isC) {
     if (d.amharic_woreda) { g.fillText(d.amharic_woreda, 43, y); y += 28; }
     if (d.english_woreda) { g.fillText(d.english_woreda, 43, y); }
 
-    // Baseline fixes for bottom coordinates
     g.textBaseline = 'bottom';
+    // User requested: small down at fin (further from top), move up small at sn (closer to top)
     g.font = `bold 30px ${fontStack}`;
-    if (d.fin_number) { g.fillText(d.fin_number, 171, 800 - 113); }
+    if (d.fin_number) { g.fillText(d.fin_number, 171, 800 - 105); } // Was 113, now 105 (Small down)
     
     const sn = 'S' + Math.floor(100000000 + Math.random() * 900000000).toString();
     g.font = `bold 28px ${fontStack}`; 
-    g.fillText(sn, 1070, 800 - 27);
+    g.fillText(sn, 1070, 800 - 35); // Was 27, now 35 (Move up small)
 }
 
-bot.launch().then(() => console.log('Bot Final Absolute Perfection V5 Ready!'));
+bot.launch().then(() => console.log('Bot Final Micro-Adjustments Applied!'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
