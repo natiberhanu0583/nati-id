@@ -339,35 +339,40 @@ function drawRotatedCSS(g, text, x, y, fontSize, lineHeight, rotationDeg) {
 
 function drawText(g, d, isC) {
     g.fillStyle = 'black';
+    // Tuning offsets for front card text (if the canvas font renders slightly differently than the browser)
+    const tuneX = 0;
+    const tuneY = 0;
+
     if (isC) {
         g.textBaseline = 'top';
-        g.textAlign = 'center'; const x = 640;
+        g.textAlign = 'center'; const x = 640 + tuneX;
         g.font = `bold 36px ${fontStack}`;
-        if (d.amharic_name) g.fillText(d.amharic_name, x, 250);
-        if (d.english_name) g.fillText(d.english_name, x, 295);
+        if (d.amharic_name) g.fillText(d.amharic_name, x, 250 + tuneY);
+        if (d.english_name) g.fillText(d.english_name, x, 295 + tuneY);
         g.font = `bold 34px ${fontStack}`;
-        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, x, 420);
-        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, x, 505);
-        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, x, 590);
-        if (d.fcn_id) { g.font=`bold 32px ${fontStack}`; g.fillText(d.fcn_id, x, 750); }
+        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, x, 420 + tuneY);
+        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, x, 505 + tuneY);
+        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, x, 590 + tuneY);
+        if (d.fcn_id) { g.font=`bold 32px ${fontStack}`; g.fillText(d.fcn_id, x, 750 + tuneY); }
     } else {
         g.textAlign = 'left'; 
         g.font = `bold 34px ${fontStack}`;
         
         // Full Names with explicit leading-11 (44px line height)
-        drawTextCSS(g, d.amharic_name||'', 510, 210, 34, 44);
-        drawTextCSS(g, d.english_name||'', 510, 254, 34, 44); 
+        drawTextCSS(g, d.amharic_name||'', 510 + tuneX, 210 + tuneY, 34, 44);
+        drawTextCSS(g, d.english_name||'', 510 + tuneX, 254 + tuneY, 34, 44); 
         
         // Dates with implied default tailwind line-height (1.5 -> 51px)
-        drawTextCSS(g, `${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374, 34, 51);
-        drawTextCSS(g, `${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457, 34, 51);
-        drawTextCSS(g, `${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542, 34, 51);
+        drawTextCSS(g, `${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512 + tuneX, 374 + tuneY, 34, 51);
+        drawTextCSS(g, `${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512 + tuneX, 457 + tuneY, 34, 51);
+        drawTextCSS(g, `${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512 + tuneX, 542 + tuneY, 34, 51);
         
         g.font = `bold 28px ${fontStack}`;
         
-        // Issue Dates (using user adjusted left: 20px)
-        drawRotatedCSS(g, d.issue_date_ethiopian||'', 20, 560, 28, 42, -90);
-        drawRotatedCSS(g, d.issue_date_gregorian||'', 20, 200, 28, 42, -90);
+        // Issue Dates (Restored to 26px to prevent clipping, waiting for user clarity)
+        const dateX = 26 + tuneX;
+        drawRotatedCSS(g, d.issue_date_ethiopian||'', dateX, 560 + tuneY, 28, 42, -90);
+        drawRotatedCSS(g, d.issue_date_gregorian||'', dateX, 200 + tuneY, 28, 42, -90);
     }
 }
 
