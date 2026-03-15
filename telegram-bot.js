@@ -115,8 +115,8 @@ bot.action(['style_color', 'style_bw'], async (ctx) => {
     await ctx.editMessageText(`✅ ID Added! Total: ${ctx.session.allProcessedData.length}`, 
         Markup.inlineKeyboard([
             [Markup.button.callback('➕ Add Another', 'add_more')],
-            [Markup.button.callback('📄 Shelf (JPG)', 'gen_shelf'), Markup.button.callback('🖼 Bulk Individual (JPG)', 'gen_bulk_jpg')],
-            [Markup.button.callback('📝 Shelf (Word)', 'gen_word'), Markup.button.callback('🔄 Restart', 'restart')]
+            [Markup.button.callback('🖼 Bulk Individual (JPG)', 'gen_bulk_jpg'), Markup.button.callback('📝 Shelf (Word)', 'gen_word')],
+            [Markup.button.callback('🔄 Restart', 'restart')]
         ])
     );
 });
@@ -219,38 +219,6 @@ async function renderAllIDs(ids) {
     return results;
 }
 
-bot.action('gen_shelf', async (ctx) => {
-    await ctx.answerCbQuery().catch(() => {});
-    const ids = ctx.session.allProcessedData;
-    if (!ids.length) return;
-    await ctx.reply('🚀 Rendering Shelf... ⏳');
-
-    const rendered = await renderAllIDs(ids);
-    const cardW = 1280, cardH = 800, pad = 40;
-    const shelfH = (cardH * 2 * ids.length) + (pad * (ids.length * 2 + 1));
-    const shelfCanvas = createCanvas(cardW + pad * 2, shelfH);
-    const s = shelfCanvas.getContext('2d');
-    s.fillStyle = '#FFFFFF'; s.fillRect(0, 0, shelfCanvas.width, shelfCanvas.height);
-
-    for (let i = 0; i < rendered.length; i++) {
-        const yTop = pad + (i * (cardH * 2 + pad * 2));
-        const yBot = yTop + cardH + pad;
-        const fImg = await loadImage(rendered[i].front);
-        const bImg = await loadImage(rendered[i].back);
-        s.drawImage(fImg, pad, yTop);
-        s.drawImage(bImg, pad, yBot);
-        
-        // Individual buttons for each person
-        await ctx.reply(`ID: ${rendered[i].name}`, Markup.inlineKeyboard([
-            [Markup.button.callback('⬇️ Download Front', `dl_f_${i}`), Markup.button.callback('⬇️ Download Back', `dl_b_${i}`)]
-        ]));
-    }
-
-    const buf = shelfCanvas.toBuffer('image/jpeg', { quality: 0.85 });
-    await ctx.replyWithDocument({ source: buf, filename: `batch_${Date.now()}.jpg` });
-    // Store in session for download
-    ctx.session.lastRendered = rendered;
-});
 
 bot.action('gen_word', async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
