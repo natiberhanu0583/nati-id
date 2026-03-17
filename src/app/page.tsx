@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,47 +56,6 @@ interface ExtractedData {
 }
 
 // Validation function to check if any required field is null
-const validateExtractedData = (data: ExtractedData): boolean => {
-  const requiredFields = [
-    'english_name',
-    'english_nationality',
-    'english_gender',
-    'english_sub_city',
-    'english_city',
-    'english_woreda',
-    'birth_date_ethiopian',
-    'birth_date_gregorian',
-    'amharic_gender',
-    'amharic_city',
-    'amharic_sub_city',
-    'amharic_nationality',
-    'amharic_name',
-    'amharic_woreda',
-    'issue_date_gregorian',
-    'issue_date_ethiopian',
-    'phone_number',
-    'expiry_date_gregorian',
-    'expiry_date_ethiopian',
-    'fcn_id',
-    'fin_number',
-    'images'
-  ];
-
-  for (const field of requiredFields) {
-    if (!data[field]) {
-      console.error(`Missing required field: ${field}`);
-      return false;
-    }
-  }
-
-  // Additional validation for images array
-  if (!Array.isArray(data.images) || data.images.length === 0) {
-    console.error('Images array is missing or empty');
-    return false;
-  }
-
-  return true;
-};
 
 // Helper function to transform remote image URLs to proxied URLs
 const transformImageUrl = (url: string | undefined): string => {
@@ -112,6 +71,31 @@ const transformImageUrl = (url: string | undefined): string => {
   return url;
 };
 
+// Helper function to normalize API response data
+const normalizeExtractedData = (data: Record<string, unknown>): ExtractedData => {
+  const result: Record<string, string | string[] | undefined> = { ...data };
+
+  // Map possible name fields to english_name
+  const possibleNameFields = ['full_name', 'fullName', 'name', 'englishFullName', 'english_full_name', 'fullNameEn'];
+  for (const field of possibleNameFields) {
+    if (data[field] && !result.english_name) {
+      result.english_name = String(data[field]);
+      break;
+    }
+  }
+
+  // Map possible amharic name fields to amharic_name
+  const possibleAmharicNameFields = ['amharic_full_name', 'amharicFullName', 'amharic_name', 'fullNameAm'];
+  for (const field of possibleAmharicNameFields) {
+    if (data[field] && !result.amharic_name) {
+      result.amharic_name = String(data[field]);
+      break;
+    }
+  }
+
+  return result as ExtractedData;
+};
+
 export default function Home() {
   const [files, setFiles] = useState<(File | null)[]>([null, null, null, null, null]);
   const [allExtractedData, setAllExtractedData] = useState<ExtractedData[]>([]);
@@ -122,12 +106,10 @@ export default function Home() {
   const [customFrontTemplate, setCustomFrontTemplate] = useState<string | null>(null);
   const [customBackTemplate, setCustomBackTemplate] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'pdf' | 'screenshot'>('pdf');
-  const [screenshotFiles, setScreenshotFiles] = useState<(File | null)[]>([null, null, null]);
-  const [isMultiScreenshotMode, setIsMultiScreenshotMode] = useState(true);
+  const [screenshotFiles] = useState<(File | null)[]>([null, null, null]);
   const [multiScreenshotSets, setMultiScreenshotSets] = useState<(File | null)[][]>([]);
   const [activeIdSection, setActiveIdSection] = useState<number | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const session = useSession()
   const user = session?.data?.user;
@@ -168,7 +150,7 @@ export default function Home() {
       }
       setMultiScreenshotSets(newSets);
     }
-  }, [activeIdSection]);
+  }, [activeIdSection, multiScreenshotSets]);
 
   // Drag and drop handlers
   const handleDragOver = (e: React.DragEvent) => {
@@ -213,21 +195,6 @@ export default function Home() {
     e.stopPropagation();
   };
 
-  const handleScreenshotDrop = (e: React.DragEvent, imageIndex: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      const file = files[0];
-      if (file.type.startsWith('image/')) {
-        const newFiles = [...screenshotFiles];
-        newFiles[imageIndex] = file;
-        setScreenshotFiles(newFiles);
-      } else {
-        setError('Please drop an image file');
-      }
-    }
-  };
 
   const handleIdButtonClick = (idNumber: number) => {
     console.log('Clicked ID:', idNumber, 'Current active:', activeIdSection, 'Current sets length:', multiScreenshotSets.length);
@@ -246,9 +213,6 @@ export default function Home() {
     }
   };
 
-  const removeScreenshotSet = (index: number) => {
-    setMultiScreenshotSets(multiScreenshotSets.filter((_, i) => i !== index));
-  };
 
   const updateScreenshotSet = (setIndex: number, imageIndex: number, file: File | null) => {
     const newSets = [...multiScreenshotSets];
@@ -270,10 +234,6 @@ export default function Home() {
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = e.target.files ? Array.from(e.target.files) : [];
-    handleFilesSelection(selectedFiles);
-  };
 
   const handleFilesSelection = (selectedFiles: File[]) => {
     if (selectedFiles.length > 5) {
@@ -343,7 +303,7 @@ export default function Home() {
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
     const validFiles = files.filter(file => file !== null);
-    
+
     if (validFiles.length === 0) {
       setError("Please select at least one PDF file");
       return;
@@ -374,9 +334,10 @@ export default function Home() {
           });
 
           if (response.data) {
+            const normalizedData = normalizeExtractedData(response.data);
             const transformedData = {
-              ...response.data,
-              images: (response.data.images || []).map((img: string) => transformImageUrl(img)),
+              ...normalizedData,
+              images: (normalizedData.images || []).map((img: string) => transformImageUrl(img)),
               source: 'pdf' as const
             };
             newExtractedData.push(transformedData);
@@ -449,15 +410,19 @@ export default function Home() {
               }
             });
 
-                if (response.data) {
-                  const transformedData = {
-                    ...response.data,
-                    images: (response.data.images || []).map((img: string) => transformImageUrl(img))
-                  };
-                  newExtractedData.push(transformedData);
-                }
-          } catch (err) {
-            console.error(`Error processing ID set ${i + 1}:`, err);
+            if (response.data) {
+              const normalizedData = normalizeExtractedData(response.data);
+              const transformedData = {
+                ...normalizedData,
+                images: (normalizedData.images || []).map((img: string) => transformImageUrl(img))
+              };
+              newExtractedData.push(transformedData);
+            }
+          } catch (err: unknown) {
+            const axiosError = err as { response?: { data?: { message?: string } } };
+            const errorMsg = axiosError?.response?.data?.message || (err as Error).message || 'Unknown error';
+            console.error(`Error processing ID set ${i + 1}:`, errorMsg);
+            // Don't fail immediately - continue processing other sets
           }
         }
 
@@ -468,8 +433,10 @@ export default function Home() {
           setError("Failed to process any ID cards. Please check your images and try again.");
         }
       } catch (err: unknown) {
-        console.error("Multi-screenshot upload error:", err);
-        setError("Batch processing failed. Please try again.");
+        const axiosError = err as { response?: { data?: { message?: string } } };
+        const errorMsg = axiosError?.response?.data?.message || (err as Error).message || 'Unknown error';
+        console.error("Multi-screenshot upload error:", errorMsg);
+        setError(`Batch processing failed: ${errorMsg}`);
       } finally {
         setLoading(false);
       }
@@ -514,7 +481,7 @@ export default function Home() {
         }
       } catch (err: unknown) {
         console.error("Screenshot upload error:", err);
-        const errorMessage = err && typeof err === 'object' && 'response' in err 
+        const errorMessage = err && typeof err === 'object' && 'response' in err
           ? (err as ErrorResponse).response?.data?.message || "Screenshot processing failed. Please try again."
           : "Screenshot processing failed. Please try again.";
         setError(errorMessage);
@@ -621,8 +588,8 @@ export default function Home() {
             {/* Upload Section */}
             <div className="space-y-6">
               {activeTab === 'pdf' ? (
-                <form 
-                  onSubmit={handleUpload} 
+                <form
+                  onSubmit={handleUpload}
                   className="space-y-6"
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
@@ -638,11 +605,10 @@ export default function Home() {
 
                     {/* Bulk PDF Upload Zone */}
                     <div
-                      className={`relative border-2 border-dashed rounded-2xl p-8 mb-6 text-center cursor-pointer transition-all duration-300 ${
-                        isDragOver 
-                          ? 'border-blue-400 bg-blue-50/50 shadow-inner' 
+                      className={`relative border-2 border-dashed rounded-2xl p-8 mb-6 text-center cursor-pointer transition-all duration-300 ${isDragOver
+                          ? 'border-blue-400 bg-blue-50/50 shadow-inner'
                           : 'border-blue-200 hover:border-blue-400 bg-white shadow-sm'
-                      }`}
+                        }`}
                       onClick={() => document.getElementById('bulk-pdf-upload')?.click()}
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
@@ -798,29 +764,28 @@ export default function Home() {
                             type="button"
                             onClick={() => handleIdButtonClick(idNum)}
                             disabled={multiScreenshotSets.length >= 5}
-                            className={`w-full flex items-center justify-center gap-1 ${
-                              multiScreenshotSets.length >= 5
+                            className={`w-full flex items-center justify-center gap-1 ${multiScreenshotSets.length >= 5
                                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 : activeIdSection === idNum
-                                ? idNum === 1 
-                                  ? 'bg-blue-700 text-white'
-                                  : idNum === 2
-                                  ? 'bg-purple-700 text-white'
-                                  : idNum === 3
-                                  ? 'bg-green-700 text-white'
-                                  : idNum === 4
-                                  ? 'bg-orange-700 text-white'
-                                  : 'bg-red-700 text-white'
-                                : idNum === 1 
-                                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                  : idNum === 2
-                                  ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                                  : idNum === 3
-                                  ? 'bg-green-600 hover:bg-green-700 text-white'
-                                  : idNum === 4
-                                  ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                                  : 'bg-red-600 hover:bg-red-700 text-white'
-                            }`}
+                                  ? idNum === 1
+                                    ? 'bg-blue-700 text-white'
+                                    : idNum === 2
+                                      ? 'bg-purple-700 text-white'
+                                      : idNum === 3
+                                        ? 'bg-green-700 text-white'
+                                        : idNum === 4
+                                          ? 'bg-orange-700 text-white'
+                                          : 'bg-red-700 text-white'
+                                  : idNum === 1
+                                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                    : idNum === 2
+                                      ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                                      : idNum === 3
+                                        ? 'bg-green-600 hover:bg-green-700 text-white'
+                                        : idNum === 4
+                                          ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                                          : 'bg-red-600 hover:bg-red-700 text-white'
+                              }`}
                           >
                             <Plus className="h-3 w-3" />
                             ID {idNum}
@@ -845,7 +810,7 @@ export default function Home() {
                               Close
                             </Button>
                           </div>
-                          
+
                           <div className="border rounded-xl p-4 bg-slate-50">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                               {[1, 2, 3].map((num) => (
@@ -861,8 +826,7 @@ export default function Home() {
                                     </p>
                                   </div>
                                   <div
-                                    className={`relative border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition-all duration-200 h-48 flex flex-col items-center justify-center ${
-                                      (multiScreenshotSets[activeIdSection - 1] && multiScreenshotSets[activeIdSection - 1][num - 1])
+                                    className={`relative border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition-all duration-200 h-48 flex flex-col items-center justify-center ${(multiScreenshotSets[activeIdSection - 1] && multiScreenshotSets[activeIdSection - 1][num - 1])
                                         ? 'border-green-200 bg-green-50'
                                         : 'border-blue-100 hover:border-blue-300 bg-slate-50/50'
                                       }`}
@@ -925,7 +889,7 @@ export default function Home() {
                         {multiScreenshotSets.map((screenshotSet, setIndex) => {
                           const hasImages = screenshotSet.some(file => file !== null);
                           if (!hasImages) return null;
-                          
+
                           return (
                             <div key={setIndex} className="border rounded-xl p-4 bg-blue-50/30">
                               <h4 className="font-semibold text-slate-700 mb-3">ID Card {setIndex + 1}</h4>
@@ -948,7 +912,7 @@ export default function Home() {
                                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent p-2">
                                           <p className="text-white text-xs font-medium">
                                             {num === 1 ? 'Photo + QR' :
-                                             num === 2 ? 'Front' : 'Back'}
+                                              num === 2 ? 'Front' : 'Back'}
                                           </p>
                                         </div>
                                       </div>
@@ -961,9 +925,8 @@ export default function Home() {
                                 ))}
                               </div>
                               <div className="mt-3 flex items-center gap-2">
-                                <div className={`w-3 h-3 rounded-full ${
-                                  screenshotSet[1] && screenshotSet[2] ? 'bg-green-500' : 'bg-yellow-500'
-                                }`} />
+                                <div className={`w-3 h-3 rounded-full ${screenshotSet[1] && screenshotSet[2] ? 'bg-green-500' : 'bg-yellow-500'
+                                  }`} />
                                 <span className="text-sm text-slate-600">
                                   {screenshotSet[1] && screenshotSet[2] ? 'Ready to process' : 'Missing required images'}
                                 </span>
@@ -986,7 +949,7 @@ export default function Home() {
                   <Button
                     type="submit"
                     disabled={
-                      isMultiScreenshotMode 
+                      isMultiScreenshotMode
                         ? (multiScreenshotSets.length === 0 || multiScreenshotSets.every(set => !set[1] || !set[2]) || loading)
                         : (!screenshotFiles[1] || !screenshotFiles[2] || loading)
                     }
@@ -1000,7 +963,7 @@ export default function Home() {
                     ) : (
                       <>
                         <Upload className="mr-3 h-5 w-5" />
-                        {isMultiScreenshotMode 
+                        {isMultiScreenshotMode
                           ? `Extract Data from ${multiScreenshotSets.filter(set => set[1] && set[2]).length} ID Card(s)`
                           : 'Extract Data from Screenshots'
                         }
@@ -1422,31 +1385,6 @@ function GeneratedIDCardList({ dataList, customFrontTemplate, customBackTemplate
 }
 
 
-interface ExtractedData {
-  english_name: string;
-  english_nationality: string;
-  english_gender: string;
-  english_sub_city: string;
-  english_city: string;
-  english_woreda: string;
-  birth_date_ethiopian: string;
-  birth_date_gregorian: string;
-  amharic_gender: string;
-  amharic_city: string;
-  amharic_sub_city: string;
-  amharic_nationality: string;
-  amharic_name: string;
-  amharic_woreda: string;
-  issue_date_gregorian: string;
-  issue_date_ethiopian: string;
-  phone_number: string;
-  expiry_date_gregorian: string;
-  expiry_date_ethiopian: string;
-  fcn_id: string;
-  fin_number: string;
-  images: string[];
-}
-
 interface GeneratedIDCardPreviewProps {
   data: ExtractedData;
   index: number;
@@ -1458,8 +1396,8 @@ function GeneratedIDCardPreview({ data, index, customFrontTemplate, customBackTe
   const [selectedProfileImage, setSelectedProfileImage] = useState<string>((data.images && data.images.length > 1) ? data.images[1] : (data.images?.[0] || ''));
   const [selectedMiniProfileImage, setSelectedMiniProfileImage] = useState<string>(data.images?.[0] || '');
   const [selectedQRCodeImage, setSelectedQRCodeImage] = useState<string>(
-    data.source === 'pdf' 
-      ? (data.images?.[2] || '') 
+    data.source === 'pdf'
+      ? (data.images?.[2] || '')
       : (data.images?.[3] || data.images?.[2] || '')
   );
   const [serialNumber, setSerialNumber] = useState<string>(generateRandomSerial());
@@ -1502,7 +1440,7 @@ function GeneratedIDCardPreview({ data, index, customFrontTemplate, customBackTe
         setSerialNumber(generateRandomSerial());
       }, 0);
     }
-  }, [data.images]);
+  }, [data.images, data.source]);
 
   return (
     <div className="space-y-8 ">
@@ -1742,7 +1680,7 @@ function GeneratedIDCardPreview({ data, index, customFrontTemplate, customBackTe
               {/* Profile Images */}
               {data.images && data.images.length > 0 && (
                 <>
-                  <img crossOrigin="anonymous"
+                  <Image crossOrigin="anonymous"
                     width={440}
                     height={540}
                     src={selectedProfileImage.startsWith('/') ? selectedProfileImage : `https://api.affiliate.pro.et/${selectedProfileImage}`}
@@ -1758,7 +1696,7 @@ function GeneratedIDCardPreview({ data, index, customFrontTemplate, customBackTe
                       filter: `hue-rotate(${hue}deg) saturate(${saturation}%) brightness(${lightness}%) contrast(${contrast}%) grayscale(${grayscale}%) sepia(${sepia}%)`
                     }}
                   />
-                  <img crossOrigin="anonymous"
+                  <Image crossOrigin="anonymous"
                     width={100}
                     height={130}
                     src={selectedMiniProfileImage.startsWith('/') ? selectedMiniProfileImage : `https://api.affiliate.pro.et/${selectedMiniProfileImage}`}
@@ -1957,7 +1895,7 @@ function GeneratedIDCardPreview({ data, index, customFrontTemplate, customBackTe
                 height: '650px',
                 backgroundColor: 'rgb(255, 255, 255)'
               }}>
-                <img crossOrigin="anonymous"
+                <Image crossOrigin="anonymous"
                   width={690}
                   height={690}
                   src={selectedQRCodeImage.startsWith('/') ? selectedQRCodeImage : `https://api.affiliate.pro.et/${selectedQRCodeImage}`}
