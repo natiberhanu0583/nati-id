@@ -1,6 +1,4 @@
-console.log('🔄 Initializing Screenshot Bot...');
-
-const bwipjs = require('bwip-js');
+﻿const bwipjs = require('bwip-js');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: '.env.local' });
@@ -12,54 +10,40 @@ const { Document, Packer, Paragraph, ImageRun, AlignmentType } = require('docx')
 
 // Register fonts
 try {
-    const ebrimaBoldPath = path.join(__dirname, 'public', 'ebrimabd.ttf');
-    if (fs.existsSync(ebrimaBoldPath)) {
-        registerFont(ebrimaBoldPath, { family: 'EbrimaBold' });
-    } else {
-        console.warn('⚠️ Warning: Font not found:', ebrimaBoldPath);
-    }
-    const fontPath = path.join(__dirname, 'public', 'NOKIA ኖኪያ ቀላል.TTF');
+    const ebrimaBoldPath = 'C:\\Windows\\Fonts\\ebrimabd.ttf';
+    if (fs.existsSync(ebrimaBoldPath)) registerFont(ebrimaBoldPath, { family: 'EbrimaBold' });
+    const fontPath = path.join(__dirname, 'public', 'NOKIA ßèûßè¬ßï½ ßëÇßêïßêì.TTF');
     if (fs.existsSync(fontPath)) registerFont(fontPath, { family: 'AmharicFont' });
-} catch (e) { }
-
-const JWT_TOKEN = process.env.AFFILIATE_PRO_JWT;
-const API_URL = process.env.AFFILIATE_PRO_API_URL || "https://api.affiliate.pro.et/api/v1/process-screenshots";
-
-if (!process.env.TELEGRAM_BOT_TOKEN) {
-    console.error('❌ TELEGRAM_BOT_TOKEN is not set in .env.local');
-    process.exit(1);
-}
+} catch (e) {}
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 bot.use(session());
 
-if (!JWT_TOKEN) {
-    console.error('❌ AFFILIATE_PRO_JWT is not set in .env.local');
-    process.exit(1);
-}
+const JWT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OTY0YTkyYTBiYzlhMDlmMjdmYjY0YjkiLCJpYXQiOjE3NzMxNjI3ODUsImV4cCI6MTc3Mzc2NzU4NX0.sBYNIOPetKwecdp_aCZZLqUkvAsOY-4hK__wHubL0SY";
+const API_URL = "https://api.affiliate.pro.et/api/v1/process-screenshots";
 
-const INITIAL_SESSION = {
+const INITIAL_SESSION = { 
     step: 0, images: [], allProcessedData: [],
     templateChoice: 'front-template.jpg',
     backTemplateChoice: 'back-template.jpg',
     filterChoice: 'color', isC: false
 };
 
-const cancelBtn = Markup.button.callback('❌ Cancel', 'cancel_process');
+const cancelBtn = Markup.button.callback('Γ¥î Cancel', 'cancel_process');
 
 bot.start((ctx) => {
     ctx.session = { ...INITIAL_SESSION, allProcessedData: [] };
-    ctx.reply('Welcome! 🇪🇹 Upload **Image 1 (Popup/Photo + QR)**. (Or /skip)', Markup.inlineKeyboard([
-        [Markup.button.callback('⏭ Skip Image 1', 'skip_img'), cancelBtn]
+    ctx.reply('Welcome! ≡ƒç¬≡ƒç╣ Upload **Image 1 (Popup/Photo + QR)**. (Or /skip)', Markup.inlineKeyboard([
+        [Markup.button.callback('ΓÅ¡ Skip Image 1', 'skip_img'), cancelBtn]
     ]));
 });
 
 bot.action('cancel_process', async (ctx) => {
     ctx.session.step = 0;
     ctx.session.images = [];
-    await ctx.answerCbQuery('Process Cancelled').catch(() => { });
-    await ctx.reply('❌ Process Cancelled. Send **Image 1** to start over:', Markup.inlineKeyboard([
-        [Markup.button.callback('⏭ Skip Image 1', 'skip_img')]
+    await ctx.answerCbQuery('Process Cancelled').catch(() => {});
+    await ctx.reply('Γ¥î Process Cancelled. Send **Image 1** to start over:', Markup.inlineKeyboard([
+        [Markup.button.callback('ΓÅ¡ Skip Image 1', 'skip_img')]
     ]));
 });
 
@@ -67,7 +51,7 @@ bot.action('skip_img', async (ctx) => {
     if (!ctx.session || (ctx.session.step !== 0 && ctx.session.step !== 1)) return ctx.answerCbQuery();
     ctx.session.images[ctx.session.step] = null;
     ctx.session.step++;
-    await ctx.answerCbQuery().catch(() => { });
+    await ctx.answerCbQuery().catch(() => {});
     await ctx.reply(`Skipped. Upload **Image ${ctx.session.step + 1}**:`, Markup.inlineKeyboard([
         [cancelBtn]
     ]));
@@ -85,15 +69,15 @@ bot.on('photo', async (ctx) => {
     const photo = ctx.message.photo.pop();
     const fileLink = await ctx.telegram.getFileLink(photo.file_id);
     ctx.session.images[ctx.session.step] = fileLink.href;
-
+    
     if (ctx.session.step === 0) {
         ctx.session.step = 1;
-        ctx.reply('✅ Image 1 received. Upload **Image 2 (Front)**:', Markup.inlineKeyboard([[cancelBtn]]));
+        ctx.reply('Γ£à Image 1 received. Upload **Image 2 (Front)**:', Markup.inlineKeyboard([[cancelBtn]]));
     } else if (ctx.session.step === 1) {
         ctx.session.step = 2;
-        ctx.reply('✅ Image 2 received. Upload **Image 3 (Back)**:', Markup.inlineKeyboard([[cancelBtn]]));
+        ctx.reply('Γ£à Image 2 received. Upload **Image 3 (Back)**:', Markup.inlineKeyboard([[cancelBtn]]));
     } else if (ctx.session.step === 2) {
-        ctx.reply('🚀 Processing ID... ⏳');
+        ctx.reply('≡ƒÜÇ Processing ID... ΓÅ│');
         await processId(ctx);
     }
 });
@@ -102,7 +86,7 @@ async function processId(ctx) {
     try {
         const formData = new FormData();
         const urls = ctx.session.images;
-        const buffers = await Promise.all(urls.map(url =>
+        const buffers = await Promise.all(urls.map(url => 
             url ? axios.get(url, { responseType: 'arraybuffer' }).then(r => Buffer.from(r.data)) : Promise.resolve(null)
         ));
         if (buffers[0]) formData.append('image1', buffers[0], { filename: '1.jpg' });
@@ -113,7 +97,7 @@ async function processId(ctx) {
         });
         if (response.data) {
             ctx.session.currentIdData = response.data;
-            await ctx.reply('✅ Extracted! Choose Template:',
+            await ctx.reply('Γ£à Extracted! Choose Template:', 
                 Markup.inlineKeyboard([
                     [Markup.button.callback('Template A', 'tpl_a'), Markup.button.callback('Template B', 'tpl_b')],
                     [Markup.button.callback('Template C (Modern)', 'tpl_c')],
@@ -121,34 +105,34 @@ async function processId(ctx) {
                 ])
             );
         }
-    } catch (e) { ctx.reply('❌ Error: ' + e.message, Markup.inlineKeyboard([[cancelBtn]])); }
+    } catch (e) { ctx.reply('Γ¥î Error: ' + e.message, Markup.inlineKeyboard([[cancelBtn]])); }
 }
 
 bot.action('tpl_c', async (ctx) => {
     ctx.session.templateChoice = 'front-template.jpg';
     ctx.session.backTemplateChoice = 'back-template.jpg';
     ctx.session.isC = true;
-    await ctx.answerCbQuery().catch(() => { });
+    await ctx.answerCbQuery().catch(() => {});
     await ctx.editMessageText('Choose Photo Style:', Markup.inlineKeyboard([
-        [Markup.button.callback('🌈 Color', 'style_color'), Markup.button.callback('⚫️ B&W', 'style_bw')],
+        [Markup.button.callback('≡ƒîê Color', 'style_color'), Markup.button.callback('ΓÜ½∩╕Å B&W', 'style_bw')],
         [cancelBtn]
     ]));
 });
 
 bot.action(['tpl_a', 'tpl_b'], async (ctx) => {
-    const m = { 'tpl_a': ['front-template.jpg', 'back-template.jpg'], 'tpl_b': ['front-templateb.jpg', 'back-template.jpg'] };
+    const m = { 'tpl_a':['front-template.jpg','back-template.jpg'], 'tpl_b':['front-templateb.jpg','back-template.jpg'] };
     [ctx.session.templateChoice, ctx.session.backTemplateChoice] = m[ctx.match];
     ctx.session.isC = false;
-    await ctx.answerCbQuery().catch(() => { });
+    await ctx.answerCbQuery().catch(() => {});
     await ctx.editMessageText('Choose Photo Style:', Markup.inlineKeyboard([
-        [Markup.button.callback('🌈 Color', 'style_color'), Markup.button.callback('⚫️ B&W', 'style_bw')],
+        [Markup.button.callback('≡ƒîê Color', 'style_color'), Markup.button.callback('ΓÜ½∩╕Å B&W', 'style_bw')],
         [cancelBtn]
     ]));
 });
 
 bot.action(['style_color', 'style_bw'], async (ctx) => {
     ctx.session.filterChoice = ctx.match === 'style_color' ? 'color' : 'bw';
-    await ctx.answerCbQuery().catch(() => { });
+    await ctx.answerCbQuery().catch(() => {});
     ctx.session.allProcessedData.push({
         data: ctx.session.currentIdData,
         template: ctx.session.templateChoice,
@@ -157,28 +141,28 @@ bot.action(['style_color', 'style_bw'], async (ctx) => {
         isTemplateC: ctx.session.isC
     });
     ctx.session.images = []; ctx.session.step = 0;
-    await ctx.editMessageText(`✅ ID Added! Total Batch: ${ctx.session.allProcessedData.length}`,
+    await ctx.editMessageText(`Γ£à ID Added! Total Batch: ${ctx.session.allProcessedData.length}`, 
         Markup.inlineKeyboard([
-            [Markup.button.callback('➕ Add Another ID', 'add_more')],
-            [Markup.button.callback('🖼 Bulk Individual (JPG)', 'gen_bulk_jpg')],
-            [Markup.button.callback('📝 Shelf (Word)', 'gen_word')],
-            [Markup.button.callback('🔄 Restart Batch', 'restart')]
+            [Markup.button.callback('Γ₧ò Add Another ID', 'add_more')],
+            [Markup.button.callback('≡ƒû╝ Bulk Individual (JPG)', 'gen_bulk_jpg')],
+            [Markup.button.callback('≡ƒô¥ Shelf (Word)', 'gen_word')],
+            [Markup.button.callback('≡ƒöä Restart Batch', 'restart')]
         ])
     );
 });
 
 bot.action('add_more', async (ctx) => {
-    await ctx.answerCbQuery().catch(() => { });
+    await ctx.answerCbQuery().catch(() => {});
     await ctx.reply('Upload **Image 1** for the next ID:', Markup.inlineKeyboard([
-        [Markup.button.callback('⏭ Skip Image 1', 'skip_img'), cancelBtn]
+        [Markup.button.callback('ΓÅ¡ Skip Image 1', 'skip_img'), cancelBtn]
     ]));
 });
 
 bot.action('restart', async (ctx) => {
     ctx.session = { ...INITIAL_SESSION, allProcessedData: [] };
-    await ctx.answerCbQuery().catch(() => { });
+    await ctx.answerCbQuery().catch(() => {});
     await ctx.reply('Cleared. Send **Image 1**:', Markup.inlineKeyboard([
-        [Markup.button.callback('⏭ Skip Image 1', 'skip_img')]
+        [Markup.button.callback('ΓÅ¡ Skip Image 1', 'skip_img')]
     ]));
 });
 
@@ -217,46 +201,11 @@ async function renderAndSendSingleID(ctx, id, idx) {
             g.drawImage(tpl, 0, 0, ID_W, ID_H);
             if (pImg) {
                 g.save();
-                g.filter = id.filter === 'bw' ? 'hue-rotate(0deg) saturate(41%) brightness(122%) contrast(100%) grayscale(20%) sepia(20%)' : 'saturate(45%) brightness(100%) grayscale(74%) sepia(10%)';
-                // CSS object-fit: contain simulation
-                const cw = 440; const ch = 540;
-                const imgAspect = pImg.width / pImg.height;
-                const canvasAspect = cw / ch;
-                let drawW, drawH, drawX, drawY;
-                if (imgAspect > canvasAspect) {
-                    drawW = cw; drawH = cw / imgAspect;
-                    drawX = 55; drawY = 170 + (ch - drawH) / 2;
-                } else {
-                    drawH = ch; drawW = ch * imgAspect;
-                    drawY = 170; drawX = 55 + (cw - drawW) / 2;
-                }
-                // Clip to rounded rectangle to mimic CSS border-radius: 8px
-                const rr = 8;
-                g.beginPath();
-                g.moveTo(drawX + rr, drawY);
-                g.arcTo(drawX + drawW, drawY, drawX + drawW, drawY + drawH, rr);
-                g.arcTo(drawX + drawW, drawY + drawH, drawX, drawY + drawH, rr);
-                g.arcTo(drawX, drawY + drawH, drawX, drawY, rr);
-                g.arcTo(drawX, drawY, drawX + drawW, drawY, rr);
-                g.closePath();
-                g.clip();
-                g.drawImage(pImg, drawX, drawY, drawW, drawH);
+                g.filter = id.filter === 'bw' ? 'grayscale(100%) brightness(110%) contrast(110%)' : 'saturate(45%) brightness(100%) grayscale(74%) sepia(10%)';
+                g.drawImage(pImg, 55, 170, 440, 540); 
                 g.restore();
             }
-            if (mImg) {
-                g.save();
-                const mx = 1030, my = 600, mw = 100, mh = 130, mrr = 4;
-                g.beginPath();
-                g.moveTo(mx + mrr, my);
-                g.arcTo(mx + mw, my, mx + mw, my + mh, mrr);
-                g.arcTo(mx + mw, my + mh, mx, my + mh, mrr);
-                g.arcTo(mx, my + mh, mx, my, mrr);
-                g.arcTo(mx, my, mx + mw, my, mrr);
-                g.closePath();
-                g.clip();
-                g.drawImage(mImg, mx, my, mw, mh);
-                g.restore();
-            }
+            if (mImg) g.drawImage(mImg, 1030, 600, 100, 130);
             if (id.data.fcn_id) await drawBarcode(g, id.data.fcn_id);
             drawText(g, id.data, id.isTemplateC);
         } else {
@@ -269,7 +218,7 @@ async function renderAndSendSingleID(ctx, id, idx) {
             }
             drawBackInfo(g, id.data, id.isTemplateC);
         }
-        return canvas.toBuffer('image/jpeg', { quality: 0.95 });
+        return canvas.toBuffer('image/jpeg', { quality: 0.95 }); 
     };
 
     const frontBuf = await render(true);
@@ -282,22 +231,22 @@ async function renderAndSendSingleID(ctx, id, idx) {
         await ctx.replyWithPhoto({ source: frontBuf }, { caption: `${safeName} Front` });
         await ctx.replyWithPhoto({ source: backBuf }, { caption: `${safeName} Back` });
     }
-    return { frontBuf, backBuf, name: name };
+    return { frontBuf, backBuf, name: safeName };
 }
 
 bot.action('gen_bulk_jpg', async (ctx) => {
-    await ctx.answerCbQuery().catch(() => { });
+    await ctx.answerCbQuery().catch(() => {});
     const ids = ctx.session.allProcessedData || [];
-    if (!ids.length) return ctx.reply('❌ No IDs found.');
-    await ctx.reply(`🖼 Processing ${ids.length} individual IDs...`);
+    if (!ids.length) return ctx.reply('Γ¥î No IDs found.');
+    await ctx.reply(`≡ƒû╝ Processing ${ids.length} individual IDs...`);
     for (let i = 0; i < ids.length; i++) {
-        try { await renderAndSendSingleID(ctx, ids[i], i); } catch (e) { }
+        try { await renderAndSendSingleID(ctx, ids[i], i); } catch (e) {}
     }
-    ctx.reply('✨ Done!');
+    ctx.reply('Γ£¿ Done!');
 });
 
 bot.action('gen_word', async (ctx) => {
-    await ctx.answerCbQuery().catch(() => { });
+    await ctx.answerCbQuery().catch(() => {});
     const ids = ctx.session.allProcessedData || [];
     if (!ids.length) return;
     try {
@@ -307,7 +256,6 @@ bot.action('gen_word', async (ctx) => {
             if (r) {
                 sections.push({
                     children: [
-                        new Paragraph({ text: r.name, alignment: AlignmentType.CENTER }),
                         new Paragraph({ children: [new ImageRun({ data: r.frontBuf, transformation: { width: 450, height: 281 } })], alignment: AlignmentType.CENTER }),
                         new Paragraph({ children: [new ImageRun({ data: r.backBuf, transformation: { width: 450, height: 281 } })], alignment: AlignmentType.CENTER })
                     ]
@@ -317,83 +265,32 @@ bot.action('gen_word', async (ctx) => {
         const doc = new Document({ sections });
         const buffer = await Packer.toBuffer(doc);
         await ctx.replyWithDocument({ source: buffer, filename: `Batch_${Date.now()}.docx` });
-    } catch (e) { ctx.reply('❌ error'); }
+    } catch (e) { ctx.reply('Γ¥î error'); }
 });
 
 async function drawBarcode(g, fcn) {
     try {
-        const bBuf = await bwipjs.toBuffer({ bcid: 'code128', text: fcn.replace(/\s/g, ''), scale: 3, height: 16, includetext: false, backgroundcolor: 'FFFFFF' });
+        const bBuf = await bwipjs.toBuffer({ bcid: 'code128', text: fcn.replace(/\s/g,''), scale: 3, height: 10, backgroundcolor: 'FFFFFF' });
         const bImg = await loadImage(bBuf);
-
-        g.font = `bold 24px "Arial", sans-serif`;
+        g.fillStyle='white'; g.fillRect(570, 620, 400, 120);
+        g.fillStyle='black'; g.font = `bold 24px ${fontStack}`; g.textAlign='center';
+        g.textBaseline = 'top';
         const spacing = 5;
         const text = fcn;
-        let textWidth = g.measureText(text).width + (text.length * spacing);
-
-        // Container exactly matching the web layout proportions
-        const boxWidth = 330;
-        const boxHeight = 110;
-
-        g.fillStyle = 'white';
-        // Web: top 620, left 570 - rounded corners like CSS borderRadius:4
-        const br = 4;
-        g.beginPath();
-        g.moveTo(570 + br, 620);
-        g.arcTo(570 + boxWidth, 620, 570 + boxWidth, 620 + boxHeight, br);
-        g.arcTo(570 + boxWidth, 620 + boxHeight, 570, 620 + boxHeight, br);
-        g.arcTo(570, 620 + boxHeight, 570, 620, br);
-        g.arcTo(570, 620, 570 + boxWidth, 620, br);
-        g.closePath();
-        g.fill();
-
-        const textStartX = 570 + (boxWidth - textWidth) / 2 + 5; // Center text
-        g.fillStyle = 'black';
-        g.textBaseline = 'top';
-        g.textAlign = 'left';
-        let currX = Math.round(textStartX);
-        for (let i = 0; i < text.length; i++) {
-            g.fillText(text[i], currX, 630); // container padding-top (10)
-            currX += g.measureText(text[i]).width + spacing;
+        let x = 770 - (g.measureText(text).width + (text.length-1)*spacing)/2;
+        for(let i=0; i<text.length; i++) {
+            g.fillText(text[i], x, 630);
+            x += g.measureText(text[i]).width + spacing;
         }
-
-        // Exact height from web (50px), fixed width to prevent distortion
-        const bDrawWidth = 290;
-        const bDrawHeight = 50;
-        const barStartX = 570 + (boxWidth - bDrawWidth) / 2;
-        g.imageSmoothingEnabled = false;
-        g.drawImage(bImg, Math.round(barStartX), 665, bDrawWidth, bDrawHeight);
-    } catch (e) { }
-}
-
-function drawTextCSS(g, text, x, y, fontSize, lineHeight) {
-    g.save();
-    g.textAlign = 'left';
-    g.textBaseline = 'top';
-    g.font = `bold ${fontSize}px ${fontStack}`;
-    // Draw at exact top coordinate to match web absolute positioning
-    g.fillText(text, Math.round(x), Math.round(y));
-    g.restore();
-}
-
-function drawRotatedCSS(g, text, x, y, fontSize, lineHeight, rotationDeg) {
-    g.save();
-    g.translate(Math.round(x), Math.round(y)); // HTML origin point
-    const originY = 0; // draw from the top like CSS absolute top
-    g.translate(0, originY);
-    g.rotate(rotationDeg * Math.PI / 180);
-    g.translate(0, -originY);
-
-    g.textAlign = 'left';
-    g.textBaseline = 'top';
-    g.font = `bold ${fontSize}px ${fontStack}`;
-    g.fillText(text, 0, 0);
-    g.restore();
+        g.drawImage(bImg, 595, 660, 350, 60);
+    } catch (e) {}
 }
 
 function drawText(g, d, isC) {
     g.fillStyle = 'black';
+    g.textBaseline = 'top';
+    const o = 5;
     if (isC) {
-        g.textBaseline = 'top';
         g.textAlign = 'center'; const x = 640;
         g.font = `bold 36px ${fontStack}`;
         if (d.amharic_name) g.fillText(d.amharic_name, x, 250);
@@ -402,25 +299,18 @@ function drawText(g, d, isC) {
         g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, x, 420);
         g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, x, 505);
         g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, x, 590);
-        if (d.fcn_id) { g.font = `bold 32px ${fontStack}`; g.fillText(d.fcn_id, x, 750); }
+        if (d.fcn_id) { g.font=`bold 32px ${fontStack}`; g.fillText(d.fcn_id, x, 750); }
     } else {
-        g.textAlign = 'left';
+        g.textAlign = 'left'; 
         g.font = `bold 34px ${fontStack}`;
-
-        // Full Names with explicit leading-11 (44px line height)
-        drawTextCSS(g, d.amharic_name || '', 510, 210, 34, 44);
-        drawTextCSS(g, d.english_name || '', 510, 254, 34, 44);
-
-        // Dates with implied default tailwind line-height (1.5 -> 51px)
-        drawTextCSS(g, `${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374, 34, 51);
-        drawTextCSS(g, `${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457, 34, 51);
-        drawTextCSS(g, `${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542, 34, 51);
-
+        if (d.amharic_name) g.fillText(d.amharic_name, 510, 210 + o);
+        if (d.english_name) g.fillText(d.english_name, 510, 210 + 44 + o);
+        g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374 + o);
+        g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, 512, 457 + o);
+        g.fillText(`${d.expiry_date_ethiopian || ''} | ${d.expiry_date_gregorian || ''}`, 512, 542 + o);
         g.font = `bold 28px ${fontStack}`;
-
-        // Issue Dates - match web absolute left: 26px
-        drawRotatedCSS(g, d.issue_date_ethiopian || '', 26, 560, 28, 42, -90);
-        drawRotatedCSS(g, d.issue_date_gregorian || '', 26, 200, 28, 42, -90);
+        g.save(); g.translate(20, 560); g.rotate(-Math.PI/2); g.fillText(d.issue_date_ethiopian||'',0,0); g.restore();
+        g.save(); g.translate(20, 200); g.rotate(-Math.PI/2); g.fillText(d.issue_date_gregorian||'',0,0); g.restore();
     }
 }
 
@@ -431,7 +321,7 @@ function drawBackInfo(g, d, isC) {
     g.font = `bold 32px ${fontStack}`;
     let y = 290;
     if (isC && d.amharic_nationality) { g.fillText(`${d.amharic_nationality} | ${d.english_nationality}`, 43, 220); }
-    if (d.amharic_city) { g.fillText(d.amharic_city, 43, y); y += 28; }
+    if (d.amharic_city) { g.fillText(d.amharic_city, 43, y); y += 28; } 
     if (d.english_city) { g.fillText(d.english_city, 43, y); y += 52; }
     if (d.amharic_sub_city) { g.fillText(d.amharic_sub_city, 43, y); y += 28; }
     if (d.english_sub_city) { g.fillText(d.english_sub_city, 43, y); y += 52; }
@@ -440,23 +330,12 @@ function drawBackInfo(g, d, isC) {
 
     g.textBaseline = 'bottom';
     g.font = `bold 30px ${fontStack}`;
-    if (d.fin_number) { g.fillText(d.fin_number, 171, 800 - 102); }
+    if (d.fin_number) { g.fillText(d.fin_number, 171, 800 - 102); } 
     const sn = 'S' + Math.floor(100000000 + Math.random() * 900000000).toString();
-    g.font = `bold 28px ${fontStack}`;
+    g.font = `bold 28px ${fontStack}`; 
     g.fillText(sn, 1070, 800 - 35);
 }
 
-bot.launch()
-    .then(() => console.log('✅ Screenshot Bot is running!'))
-    .catch(err => {
-        console.error('❌ Failed to launch Screenshot Bot.');
-        console.error('   Error:', err.message);
-        if (err.message.includes('409') || err.message.includes('Conflict')) {
-            console.error('   👉 CAUSE: Another instance is already running. Close other terminal windows.');
-        } else if (err.message.includes('401') || err.message.includes('Unauthorized')) {
-            console.error('   👉 CAUSE: Invalid TELEGRAM_BOT_TOKEN. Check your .env.local file.');
-        }
-    });
-
+bot.launch().then(() => console.log('Bot with Cancel Buttons Ready!'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));

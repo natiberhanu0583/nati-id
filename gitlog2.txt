@@ -1,0 +1,15 @@
+﻿54a8a7b Update B&W filter option with user requested specific brightness, saturation, sepia and grayscale parameters
+8e4c863 Add tuning offsets for front ID text, revert issue date position temporarily
+6cb9396 Reinstate front ID CSS engine text positions
+87938cc Revert CSS engine and map raw absolute coordinates for front ID layout
+190425a Fix barcode vertical distortion and nudge issue dates left
+9b2b38b Completely rebuild CSS layout engine simulation in canvas for front ID absolute positioning
+07103f8 Front ID true absolute format (Removed artificial offsets to match web CSS strictly)
+c13c024 Front ID absolute location fixes
+846aba3 Add cancel button to every step of the ID creation process
+fb72881 Micro-adjustments: Shift Issue Date left and nudge FIN down
+400d684 Small adjustments to FIN and SN positions for the back card
+747419a Complete absolute format synchronization with website (Baseline & Leading fixes)
+3c4618f Exhaustive absolute coordinate matching with website for perfect ID alignment
+ea6fa0a Mirror web coordinates exactly in Telegram bot at 1280x800 resolution
+867d39d Align absolute locations with website specifications for perfect ID rendering

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,31 +71,6 @@ const transformImageUrl = (url: string | undefined): string => {
   return url;
 };
 
-// Helper function to normalize API response data
-const normalizeExtractedData = (data: Record<string, unknown>): ExtractedData => {
-  const result: Record<string, string | string[] | undefined> = { ...data };
-
-  // Map possible name fields to english_name
-  const possibleNameFields = ['full_name', 'fullName', 'name', 'englishFullName', 'english_full_name', 'fullNameEn'];
-  for (const field of possibleNameFields) {
-    if (data[field] && !result.english_name) {
-      result.english_name = String(data[field]);
-      break;
-    }
-  }
-
-  // Map possible amharic name fields to amharic_name
-  const possibleAmharicNameFields = ['amharic_full_name', 'amharicFullName', 'amharic_name', 'fullNameAm'];
-  for (const field of possibleAmharicNameFields) {
-    if (data[field] && !result.amharic_name) {
-      result.amharic_name = String(data[field]);
-      break;
-    }
-  }
-
-  return result as ExtractedData;
-};
-
 export default function Home() {
   const [files, setFiles] = useState<(File | null)[]>([null, null, null, null, null]);
   const [allExtractedData, setAllExtractedData] = useState<ExtractedData[]>([]);
@@ -106,7 +81,8 @@ export default function Home() {
   const [customFrontTemplate, setCustomFrontTemplate] = useState<string | null>(null);
   const [customBackTemplate, setCustomBackTemplate] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'pdf' | 'screenshot'>('pdf');
-  const [screenshotFiles] = useState<(File | null)[]>([null, null, null]);
+  const [screenshotFiles, setScreenshotFiles] = useState<(File | null)[]>([null, null, null]);
+  const [_isMultiScreenshotMode] = useState(true);
   const [multiScreenshotSets, setMultiScreenshotSets] = useState<(File | null)[][]>([]);
   const [activeIdSection, setActiveIdSection] = useState<number | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -334,10 +310,9 @@ export default function Home() {
           });
 
           if (response.data) {
-            const normalizedData = normalizeExtractedData(response.data);
             const transformedData = {
-              ...normalizedData,
-              images: (normalizedData.images || []).map((img: string) => transformImageUrl(img)),
+              ...response.data,
+              images: (response.data.images || []).map((img: string) => transformImageUrl(img)),
               source: 'pdf' as const
             };
             newExtractedData.push(transformedData);
@@ -411,10 +386,9 @@ export default function Home() {
             });
 
             if (response.data) {
-              const normalizedData = normalizeExtractedData(response.data);
               const transformedData = {
-                ...normalizedData,
-                images: (normalizedData.images || []).map((img: string) => transformImageUrl(img))
+                ...response.data,
+                images: (response.data.images || []).map((img: string) => transformImageUrl(img))
               };
               newExtractedData.push(transformedData);
             }
