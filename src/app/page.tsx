@@ -285,10 +285,7 @@ export default function Home() {
       return;
     }
 
-    if (userPoints && userPoints.points < validFiles.length) {
-      setError(`Insufficient points. You need ${validFiles.length} points for ${validFiles.length} files.`);
-      return;
-    }
+    /* Points check bypassed */
 
     setLoading(true)
     setError(null);
@@ -303,19 +300,17 @@ export default function Home() {
         formData.append("file", file!);
 
         try {
-          const response = await axios.post("/api/process-pdf", formData, {
-            headers: {
-              "Content-Type": "multipart/form-data",
-            }
-          });
+          const response = await axios.post("/api/process-pdf", formData);
 
           if (response.data) {
-            const transformedData = {
+            // Sanitize english_name if it's only numbers (OCR error)
+            const sanitizedData = {
               ...response.data,
+              english_name: /^\d+$/.test(response.data.english_name || '') ? '' : response.data.english_name,
               images: (response.data.images || []).map((img: string) => transformImageUrl(img)),
               source: 'pdf' as const
             };
-            newExtractedData.push(transformedData);
+            newExtractedData.push(sanitizedData);
           }
         } catch (err) {
           console.error("Error processing file:", err);
@@ -357,10 +352,7 @@ export default function Home() {
         return;
       }
 
-      if (userPoints && userPoints.points < validSets.length) {
-        setError(`Insufficient points. You need ${validSets.length} points for ${validSets.length} ID cards.`);
-        return;
-      }
+      /* Points check bypassed */
 
       setLoading(true);
       setError(null);
@@ -368,6 +360,7 @@ export default function Home() {
 
       try {
         const newExtractedData: ExtractedData[] = [];
+        const errors: string[] = [];
 
         for (let i = 0; i < multiScreenshotSets.length; i++) {
           const screenshotSet = multiScreenshotSets[i];
@@ -379,11 +372,7 @@ export default function Home() {
           formData.append("image3", screenshotSet[2]!);
 
           try {
-            const response = await axios.post("/api/process-screenshots", formData, {
-              headers: {
-                "Content-Type": "multipart/form-data",
-              }
-            });
+            const response = await axios.post("/api/process-screenshots", formData);
 
             if (response.data) {
               const transformedData = {
@@ -393,18 +382,23 @@ export default function Home() {
               newExtractedData.push(transformedData);
             }
           } catch (err: unknown) {
-            const axiosError = err as { response?: { data?: { message?: string } } };
-            const errorMsg = axiosError?.response?.data?.message || (err as Error).message || 'Unknown error';
+            const axiosError = err as { response?: { data?: { message?: string; details?: any } } };
+            const errorMsg = axiosError?.response?.data?.details 
+              ? `${axiosError.response.data.message}: ${typeof axiosError.response.data.details === 'string' ? axiosError.response.data.details : JSON.stringify(axiosError.response.data.details)}`
+              : (axiosError?.response?.data?.message || (err as Error).message || 'Unknown error');
             console.error(`Error processing ID set ${i + 1}:`, errorMsg);
-            // Don't fail immediately - continue processing other sets
+            errors.push(`ID ${i + 1}: ${errorMsg}`);
           }
         }
 
         if (newExtractedData.length > 0) {
           setAllExtractedData(newExtractedData);
           fetchUserPoints();
+          if (errors.length > 0) {
+            setError(`Processed ${newExtractedData.length} cards, but some failed: ${errors.join(". ")}`);
+          }
         } else {
-          setError("Failed to process any ID cards. Please check your images and try again.");
+          setError(errors.length > 0 ? `Failed to process: ${errors.join(". ")}` : "Failed to process any ID cards. Please check your images and try again.");
         }
       } catch (err: unknown) {
         const axiosError = err as { response?: { data?: { message?: string } } };
@@ -422,10 +416,7 @@ export default function Home() {
         return;
       }
 
-      if (userPoints && userPoints.points < 1) {
-        setError(`Insufficient points. You need 1 point to process screenshots.`);
-        return;
-      }
+      /* Points check bypassed */
 
       setLoading(true);
       setError(null);
@@ -437,11 +428,7 @@ export default function Home() {
         formData.append("image2", screenshotFiles[1]!);
         formData.append("image3", screenshotFiles[2]!);
 
-        const response = await axios.post("/api/process-screenshots", formData, {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          }
-        });
+        const response = await axios.post("/api/process-screenshots", formData);
 
         if (response.data) {
           const transformedData = {
@@ -472,48 +459,14 @@ export default function Home() {
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8 p-6 bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-blue-100/50">
           <div className="flex-1">
             <h1 className="text-2xl md:text-3xl font-bold text-slate-800 mb-2">
-              Welcome back, <span className="text-lg lg:text-2xl text-blue-600">{user?.email}</span>
+              Ethiopian ID Card <span className="text-lg lg:text-2xl text-blue-600">Pro Processor</span>
             </h1>
             <div className="flex flex-wrap items-center gap-4">
-              {userPoints && (
-                <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 rounded-full border border-amber-200">
-                  <Coins className="h-5 w-5 text-amber-600" />
-                  <span className="font-semibold text-amber-700">{userPoints.points} points available</span>
-                </div>
-              )}
-              {pointsLoading && (
-                <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-full">
-                  <Loader2 className="h-4 w-4 animate-spin text-slate-600" />
-                  <span className="text-slate-600">Loading points...</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-full border border-blue-200">
+                <Shield className="h-5 w-5 text-blue-600" />
+                <span className="font-semibold text-blue-700">Unlimited Access Enabled</span>
+              </div>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {user?.id === "A6uihg20B1gGIhrMp3Z7rwrLXCUEgfko" && (
-              <Button
-                onClick={() => router.push("/add-points")}
-                className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Add Points
-              </Button>
-            )}
-            <Button
-              onClick={() => signOut({
-                fetchOptions: {
-                  onSuccess: () => {
-                    router.push("/login");
-                  },
-                },
-              })}
-              variant="outline"
-              className="flex items-center gap-2 border-red-200 text-red-600 hover:bg-red-50"
-            >
-              <LogOut className="h-4 w-4" />
-              Logout
-            </Button>
           </div>
         </div>
 
@@ -947,25 +900,7 @@ export default function Home() {
                 </form>
               )}
 
-              {/* Points Warning */}
-              {userPoints && userPoints.points < files.length && (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <Shield className="h-5 w-5 text-amber-600" />
-                    <div>
-                      <p className="text-amber-800 font-medium">
-                        Insufficient points
-                      </p>
-                      <p className="text-amber-700 text-sm mt-1">
-                        You need {files.length} points but have {userPoints.points}. Contact me{' '}
-                        <a href="https://t.me/NatiTG2" className="font-bold underline hover:text-amber-900" target="_blank" rel="noopener noreferrer">
-                          Here
-                        </a>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* Points Warning Disabled */}
 
               {/* Error Message */}
               {error && (

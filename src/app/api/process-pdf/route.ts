@@ -1,17 +1,14 @@
 import { NextResponse } from 'next/server';
-import axios from 'axios';
-import { PrismaClient } from '@/generated/prisma/client';
+import prisma from '@/lib/prisma';
 import { auth } from '@/lib/auth';
-import { revalidatePath } from 'next/cache';
-import { revalidateTag } from 'next/cache';
-
-const prisma = new PrismaClient();
+import { revalidatePath, revalidateTag } from 'next/cache';
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get('file');
 
+    /*
     const session = await auth.api.getSession({
       headers: request.headers
     });
@@ -22,8 +19,8 @@ export async function POST(request: Request) {
         { status: 401 }
       );
     }
-
-
+    */
+    const userId = 'GUEST_USER';
 
     const jwtToken = process.env.API_TOKEN || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OWFkNDNjZTdkNjcwNWI0YjJkYjI1NzUiLCJpYXQiOjE3NzM3NjkzNTYsImV4cCI6MTc3NDM3NDE1Nn0.3y8um4L7Syy1p72ZspjFJAGb6ZMcx397lUyhf7Hkrck"
 
@@ -34,6 +31,7 @@ export async function POST(request: Request) {
       );
     }
 
+    /* Skip point check for now
     // Check user points
     const user = await prisma.user.findUnique({
       where: { id: userId.toString() },
@@ -57,6 +55,7 @@ export async function POST(request: Request) {
 
     // Invalidate the points cache
     revalidatePath('/api/points');
+    */
 
 
     // Create new FormData for external API
@@ -64,44 +63,60 @@ export async function POST(request: Request) {
     externalFormData.append('file', file);
 
     // Make request to external API
-    const response = await axios.post(
-      'https://api.affiliate.pro.et/api/v1/process',
-      externalFormData,
-      {
+    try {
+      const externalResponse = await fetch('https://api.affiliate.pro.et/api/v1/process', {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${jwtToken}`,
-          'Content-Type': 'multipart/form-data',
-        }
+        },
+        body: externalFormData,
+      });
+
+      const data = await externalResponse.json();
+
+      if (!externalResponse.ok) {
+        console.error('External API error:', data);
+        return NextResponse.json(
+          { message: data.message || 'External PDF processing failed', error: data },
+          { status: externalResponse.status }
+        );
       }
-    );
 
-
-    // Deduct 1 point from user
-    await prisma.user.update({
-      where: { id: userId.toString() },
-      data: {
-        points: {
-          decrement: 1
+      /*
+      // Deduct 1 point from user
+      await prisma.user.update({
+        where: { id: userId.toString() },
+        data: {
+          points: {
+            decrement: 1
+          }
         }
-      }
-    });
+      });
 
-    // Revalidate with tag
-    revalidateTag(`user-points-${userId}`, 'default');
-    // Return the response from external API
-    return NextResponse.json(response.data);
+      // Revalidate with tag
+      revalidateTag(`user-points-${userId}`, 'default');
+      */
+      // Return the response from external API
+      return NextResponse.json(data, { status: 200 });
+
+    } catch (fetchError: unknown) {
+      console.error('Fetch error:', fetchError);
+      return NextResponse.json(
+        { message: 'Failed to connect to external processing API', error: fetchError instanceof Error ? fetchError.message : 'Unknown network error' },
+        { status: 502 }
+      );
+    }
 
   } catch (error: unknown) {
-    console.error('Proxy error:', error);
+    console.error('PDF proxy error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    const errorResponse = (error as { response?: { data?: { message?: string }; status?: number } })?.response;
 
     return NextResponse.json(
       {
-        message: errorResponse?.data?.message || 'Failed to process PDF',
+        message: 'Internal server error occurred while processing PDF',
         error: errorMessage
       },
-      { status: errorResponse?.status || 500 }
+      { status: 500 }
     );
   }
 }

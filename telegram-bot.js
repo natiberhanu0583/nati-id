@@ -390,14 +390,28 @@ function drawRotatedCSS(g, text, x, y, fontSize, lineHeight, rotationDeg) {
     g.restore();
 }
 
+function sanitizeText(text) {
+    if (!text) return '';
+    // Convert to string and trim
+    text = String(text).trim();
+    // If it's only numbers, return empty string (likely OCR error)
+    if (/^\d+$/.test(text)) return '';
+    return text;
+}
+
 function drawText(g, d, isC) {
     g.fillStyle = 'black';
+
+    // Sanitize names to prevent number-only display
+    const amharicName = sanitizeText(d.amharic_name);
+    const englishName = sanitizeText(d.english_name);
+
     if (isC) {
         g.textBaseline = 'top';
         g.textAlign = 'center'; const x = 640;
         g.font = `bold 36px ${fontStack}`;
-        if (d.amharic_name) g.fillText(d.amharic_name, x, 250);
-        if (d.english_name) g.fillText(d.english_name, x, 295);
+        if (amharicName) g.fillText(amharicName, x, 250);
+        if (englishName) g.fillText(englishName, x, 295);
         g.font = `bold 34px ${fontStack}`;
         g.fillText(`${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, x, 420);
         g.fillText(`${d.amharic_gender || ''} | ${d.english_gender || ''}`, x, 505);
@@ -408,8 +422,8 @@ function drawText(g, d, isC) {
         g.font = `bold 34px ${fontStack}`;
 
         // Full Names with explicit leading-11 (44px line height)
-        drawTextCSS(g, d.amharic_name || '', 510, 210, 34, 44);
-        drawTextCSS(g, d.english_name || '', 510, 254, 34, 44);
+        drawTextCSS(g, amharicName, 510, 210, 34, 44);
+        drawTextCSS(g, englishName, 510, 254, 34, 44);
 
         // Dates with implied default tailwind line-height (1.5 -> 51px)
         drawTextCSS(g, `${d.birth_date_ethiopian || ''} | ${d.birth_date_gregorian || ''}`, 512, 374, 34, 51);

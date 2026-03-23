@@ -1,7 +1,5 @@
 import { PrismaClient } from "@/generated/prisma";
 
-// This is a plain Prisma client WITHOUT the Accelerate extension.
-// Better Auth's Prisma adapter is incompatible with extended Prisma clients.
 const globalForPrisma = global as unknown as {
     authPrisma: PrismaClient;
 };
