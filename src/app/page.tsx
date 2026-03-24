@@ -312,17 +312,16 @@ export default function Home() {
             };
             newExtractedData.push(sanitizedData);
           }
-        } catch (err) {
+        } catch (err: unknown) {
           console.error("Error processing file:", err);
-          errors.push("Error processing file");
+          const axiosError = err as { response?: { data?: { message?: string } } };
+          errors.push(axiosError?.response?.data?.message || "Error processing file");
         }
       }
 
       if (errors.length > 0) {
         setError(errors.join(". "));
-      }
-
-      if (newExtractedData.length > 0) {
+      } else if (newExtractedData.length > 0) {
         setAllExtractedData(newExtractedData);
         fetchUserPoints();
       } else {
@@ -330,7 +329,8 @@ export default function Home() {
       }
     } catch (err: unknown) {
       console.error("Upload error:", err);
-      setError("Global upload failed. Please try again.");
+      const axiosError = err as { response?: { data?: { message?: string } } };
+      setError(axiosError?.response?.data?.message || "Global upload failed. Please try again.");
     } finally {
       setLoading(false)
     }

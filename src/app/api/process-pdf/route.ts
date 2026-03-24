@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     */
     const userId = 'GUEST_USER';
 
-    const jwtToken = process.env.API_TOKEN || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OWFkNDNjZTdkNjcwNWI0YjJkYjI1NzUiLCJpYXQiOjE3NzM3NjkzNTYsImV4cCI6MTc3NDM3NDE1Nn0.3y8um4L7Syy1p72ZspjFJAGb6ZMcx397lUyhf7Hkrck"
+    const jwtToken = process.env.API_TOKEN || ""
 
     if (!file || !userId) {
       return NextResponse.json(
@@ -64,6 +64,7 @@ export async function POST(request: Request) {
 
     // Make request to external API
     try {
+      console.log('Sending PDF to external API...');
       const externalResponse = await fetch('https://api.affiliate.pro.et/api/v1/process', {
         method: 'POST',
         headers: {
@@ -72,15 +73,17 @@ export async function POST(request: Request) {
         body: externalFormData,
       });
 
+      console.log('External API response status:', externalResponse.status);
       const data = await externalResponse.json();
 
       if (!externalResponse.ok) {
-        console.error('External API error:', data);
+        console.error('External API error data:', data);
         return NextResponse.json(
           { message: data.message || 'External PDF processing failed', error: data },
           { status: externalResponse.status }
         );
       }
+      console.log('External API success');
 
       /*
       // Deduct 1 point from user
