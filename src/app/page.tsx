@@ -1101,7 +1101,7 @@ function GeneratedIDCardList({ dataList, customFrontTemplate, customBackTemplate
       ctx.scale(-1, 1);
       ctx.drawImage(canvas, 0, 0);
 
-      return mirroredCanvas.toDataURL('image/png', 1.0);
+      return mirroredCanvas.toDataURL('image/jpeg', 0.9);
 
     } catch (error) {
       console.error('Error capturing element:', error);
@@ -1139,11 +1139,11 @@ function GeneratedIDCardList({ dataList, customFrontTemplate, customBackTemplate
 
           if (frontImage) {
             const frontBase64 = frontImage.split(',')[1];
-            zip.file(`${data.english_name || `card-${i}`}-front.png`, frontBase64, { base64: true });
+            zip.file(`${data.english_name || `card-${i}`}-front.jpg`, frontBase64, { base64: true });
           }
           if (backImage) {
             const backBase64 = backImage.split(',')[1];
-            zip.file(`${data.english_name || `card-${i}`}-back.png`, backBase64, { base64: true });
+            zip.file(`${data.english_name || `card-${i}`}-back.jpg`, backBase64, { base64: true });
           }
         }
       }
@@ -1210,10 +1210,10 @@ function GeneratedIDCardList({ dataList, customFrontTemplate, customBackTemplate
           const y = marginTop + (i * (cardHeight + gapY));
 
           if (frontImage) {
-            pdf.addImage(frontImage, 'PNG', startX, y, cardWidth, cardHeight);
+            pdf.addImage(frontImage, 'JPEG', startX, y, cardWidth, cardHeight);
           }
           if (backImage) {
-            pdf.addImage(backImage, 'PNG', startX + cardWidth + gapX, y, cardWidth, cardHeight);
+            pdf.addImage(backImage, 'JPEG', startX + cardWidth + gapX, y, cardWidth, cardHeight);
           }
         }
       }
