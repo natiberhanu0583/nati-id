@@ -11,6 +11,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@google-cloud/vision": "^5.3.5",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.19.0",
     "@prisma/extension-accelerate": "^2.0.2",
@@ -33,12 +34,15 @@
     "jszip": "^3.10.1",
     "lucide-react": "^0.553.0",
     "next": "^16.1.6",
+    "pdfjs-dist": "^4.4.168",
     "react": "19.2.0",
     "react-barcode": "^1.6.1",
     "react-dom": "19.2.0",
     "react-hook-form": "^7.66.0",
+    "sharp": "^0.34.5",
     "tailwind-merge": "^3.4.0",
     "telegraf": "^4.16.3",
+    "tesseract.js": "^7.0.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {

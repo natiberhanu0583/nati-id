@@ -295,22 +295,30 @@ export default function Home() {
     const errors: string[] = [];
 
     try {
-      for (const file of validFiles) {
+      setAllExtractedData([]);
+      let processedCount = 0;
+
+      for (let index = 0; index < validFiles.length; index++) {
+        const file = validFiles[index]!;
         const formData = new FormData();
-        formData.append("file", file!);
+        formData.append("file", file);
 
         try {
+          // Pointing to affiliate API proxy
           const response = await axios.post("/api/process-pdf", formData);
 
           if (response.data) {
-            // Sanitize english_name if it's only numbers (OCR error)
-            const sanitizedData = {
+            const transformedData = {
               ...response.data,
-              english_name: /^\d+$/.test(response.data.english_name || '') ? '' : response.data.english_name,
               images: (response.data.images || []).map((img: string) => transformImageUrl(img)),
               source: 'pdf' as const
             };
-            newExtractedData.push(sanitizedData);
+            
+            // Incrementally add to state to display immediately!
+            setAllExtractedData(prev => [...prev, transformedData]);
+            processedCount++;
+          } else {
+            errors.push("No data returned");
           }
         } catch (err: unknown) {
           console.error("Error processing file:", err);
@@ -319,12 +327,13 @@ export default function Home() {
         }
       }
 
+      if (processedCount > 0) {
+        fetchUserPoints();
+      }
+
       if (errors.length > 0) {
         setError(errors.join(". "));
-      } else if (newExtractedData.length > 0) {
-        setAllExtractedData(newExtractedData);
-        fetchUserPoints();
-      } else {
+      } else if (processedCount === 0) {
         setError("Failed to process any files. Please check your files and try again.");
       }
     } catch (err: unknown) {
@@ -362,16 +371,24 @@ export default function Home() {
         const newExtractedData: ExtractedData[] = [];
         const errors: string[] = [];
 
+        setAllExtractedData([]);
+        let processedCount = 0;
+
         for (let i = 0; i < multiScreenshotSets.length; i++) {
           const screenshotSet = multiScreenshotSets[i];
           if (!screenshotSet[1] || !screenshotSet[2]) continue; // Skip incomplete sets
 
           const formData = new FormData();
-          if (screenshotSet[0]) formData.append("image1", screenshotSet[0]);
-          formData.append("image2", screenshotSet[1]!);
-          formData.append("image3", screenshotSet[2]!);
+          const timestamp = Date.now() + Math.random().toString(36).substring(7);
+          
+          if (screenshotSet[0]) {
+            formData.append("image1", screenshotSet[0], `id${i}_img1_${timestamp}_${screenshotSet[0].name}`);
+          }
+          formData.append("image2", screenshotSet[1]!, `id${i}_img2_${timestamp}_${screenshotSet[1]!.name}`);
+          formData.append("image3", screenshotSet[2]!, `id${i}_img3_${timestamp}_${screenshotSet[2]!.name}`);
 
           try {
+            // Pointing to affiliate API proxy
             const response = await axios.post("/api/process-screenshots", formData);
 
             if (response.data) {
@@ -380,7 +397,12 @@ export default function Home() {
                 images: (response.data.images || []).map((img: string) => transformImageUrl(img)),
                 source: 'screenshot' as const
               };
-              newExtractedData.push(transformedData);
+              
+              // Incrementally show the data to give feedback!
+              setAllExtractedData(prev => [...prev, transformedData]);
+              processedCount++;
+            } else {
+              errors.push(`ID ${i + 1}: No data returned`);
             }
           } catch (err: unknown) {
             const axiosError = err as { response?: { data?: { message?: string; details?: any } } };
@@ -392,11 +414,10 @@ export default function Home() {
           }
         }
 
-        if (newExtractedData.length > 0) {
-          setAllExtractedData(newExtractedData);
+        if (processedCount > 0) {
           fetchUserPoints();
           if (errors.length > 0) {
-            setError(`Processed ${newExtractedData.length} cards, but some failed: ${errors.join(". ")}`);
+            setError(`Processed ${processedCount} cards, but some failed: ${errors.join(". ")}`);
           }
         } else {
           setError(errors.length > 0 ? `Failed to process: ${errors.join(". ")}` : "Failed to process any ID cards. Please check your images and try again.");
